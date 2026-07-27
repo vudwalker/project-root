@@ -19,7 +19,8 @@
     --shift-personal-weekday-bg: #f7f7f7;
     --shift-saturday-bg: #d8e8f5;
     --shift-holiday-bg: #f8dfd3;
-    --shift-today-bg: #d8efd0;
+    /* 当日のシフト欄。通常セルと区別できる範囲で薄い緑にします。 */
+    --shift-today-bg: #e3f4dd;
     --shift-cell-bg: #ffffff;
 
     /*
