@@ -11,5 +11,10 @@ services:
       - ./:/var/www/html
     environment:
       APACHE_DOCUMENT_ROOT: /var/www/html/public
+      # 開発用のホストマウント環境ではSQLiteをセッション保存先にしません。
+      # Windows上でも画面表示だけで書き込みエラーにならない設定です。
+      SESSION_DRIVER: file
+      CACHE_STORE: file
+      QUEUE_CONNECTION: sync
     restart: unless-stopped
 
