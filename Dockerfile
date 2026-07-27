@@ -1,7 +1,7 @@
 # Laravel開発用のPHPコンテナです。
 # 現在は仕様書と参考画像のみですが、Laravelのファイルを追加した後も
 # 同じコンテナ設定を使用できるようにしています。
-FROM php:8.3-apache
+FROM php:8.4-apache
 
 # Laravelで一般的に使用するPHP拡張をインストールします。
 RUN apt-get update \
