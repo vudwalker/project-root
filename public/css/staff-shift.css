@@ -1,6 +1,12 @@
 /*
  * スタッフ用シフト画面のスタイルです。
  * 色と寸法はCSS変数で管理し、参考画像に合わせています。
+ *
+ * 【調整するときの見方】
+ * 1. 色・セル幅・セル高さは、まず下の :root 内を変更します。
+ * 2. 個人画面は「個人用月間カレンダー」のまとまりを確認します。
+ * 3. 店舗別画面は「店舗別月間シフト表」のまとまりを確認します。
+ * 4. スマートフォンだけ変える場合は、末尾の @media 内を変更します。
  */
 :root {
     /* 罫線の色（個人カレンダー用と店舗別表用） */
@@ -14,14 +20,22 @@
     --shift-today-bg: #d8efd0;
     --shift-cell-bg: #ffffff;
 
-    /* 個人カレンダーの寸法（この基準サイズ全体を等倍率で縮小します） */
+    /*
+     * 個人カレンダーの寸法
+     * スマートフォンではJSがこの基準サイズ全体を等倍率で縮小します。
+     * セルだけを小さくしたい場合は cell-width、各段の高さを変えたい場合は
+     * weekday/date/shift-heightを変更してください。
+     */
     --shift-personal-cell-width: 72px;
     --shift-personal-width: calc(var(--shift-personal-cell-width) * 7);
     --shift-personal-weekday-height: 25px;
     --shift-personal-date-height: 21px;
     --shift-personal-shift-height: 55px;
 
-    /* 店舗別表の寸法（縮小せず横スクロールで表示します） */
+    /*
+     * 店舗別表の寸法
+     * 店舗別表はスマートフォンでも縮小せず、横スクロールで表示します。
+     */
     --shift-store-date-width: 30px;
     /* 氏名列幅は .store-shift-table 側で font-size に合わせて再定義します */
     --shift-staff-name-padding-left: 8px;
@@ -31,6 +45,10 @@
 }
 
 * {
+    /*
+     * widthやheightの中にpaddingとborderを含めます。
+     * セル幅を調整したときに、余白の分だけ意図せず広がるのを防ぎます。
+     */
     box-sizing: border-box;
 }
 
@@ -66,6 +84,7 @@ button:focus-visible {
 
 .staff-page__main {
     width: 100%;
+    /* ページ全体と画面端の間隔です。スマホ用はファイル末尾で上書きします。 */
     padding: 24px 20px;
 }
 
@@ -89,6 +108,7 @@ button:focus-visible {
 }
 
 .month-navigation {
+    /* 前月矢印・年月・翌月矢印を横一列に並べます。 */
     display: flex;
     align-items: center;
     gap: 14px;
@@ -135,6 +155,7 @@ button:focus-visible {
    ============================================ */
 
 .store-menu {
+    /* absolute指定の店舗一覧を、この要素を基準に配置します。 */
     position: relative;
     margin-left: 12px;
     white-space: nowrap;
@@ -152,6 +173,7 @@ button:focus-visible {
 }
 
 .store-menu__list {
+    /* 通常のレイアウトから切り離し、ボタンのすぐ下へ重ねて表示します。 */
     position: absolute;
     z-index: 5;
     top: 100%;
@@ -195,6 +217,10 @@ button:focus-visible {
 
 .personal-scale-wrapper {
     width: 100%;
+    /*
+     * JSで縮小する前の大きなカレンダーが横にはみ出しても、
+     * 横スクロールバーを出さないようにします。
+     */
     overflow: hidden;
 }
 
@@ -204,6 +230,7 @@ button:focus-visible {
      * 固定幅にすると外枠の1px分がはみ出し、右端の罫線が切れるためです。
      */
     width: max-content;
+    /* transform: scale()の基準を左上に固定します。 */
     transform-origin: top left;
 }
 
@@ -220,6 +247,7 @@ button:focus-visible {
 
 .personal-calendar__weekday-row,
 .personal-calendar__week {
+    /* 1週間を同じ幅の7列に分けます。 */
     display: grid;
     grid-template-columns: repeat(7, var(--shift-personal-cell-width));
 }
@@ -298,13 +326,20 @@ button:focus-visible {
 
 .store-shift-table-scroll {
     width: 100%;
+    /* 表だけを横スクロール可能にし、ページ全体の横崩れを防ぎます。 */
     overflow-x: auto;
+    /* iPhoneなどで指によるスクロールを滑らかにします。 */
     -webkit-overflow-scrolling: touch;
 }
 
 .store-shift-table {
     width: max-content;
-    /* 氏名左の余白は半角スペース1文字分（約0.5em）だけにします */
+    /*
+     * 氏名欄を調整する場合は、次の2つをセットで変更してください。
+     * padding-left：文字と左罫線の間隔
+     * width：氏名セル全体の幅
+     */
+    /* 氏名左の余白は半角スペース1文字分（約0.5em）だけにします。 */
     --shift-staff-name-padding-left: 0.5em;
     /* 列幅は漢字6文字分 + 左余白 */
     --shift-staff-name-width: calc(6em + 0.5em);
@@ -439,6 +474,10 @@ th.store-shift-table__staff-name {
    ============================================ */
 
 .visually-hidden {
+    /*
+     * 読み上げソフトには伝えつつ、画面上では見えなくする共通クラスです。
+     * 店舗別表のcaptionに使用しています。
+     */
     position: absolute;
     width: 1px;
     height: 1px;
@@ -451,6 +490,7 @@ th.store-shift-table__staff-name {
 }
 
 @media (max-width: 600px) {
+    /* 画面幅600px以下では、ページ端の余白を小さくします。 */
     .staff-page__main {
         padding: 10px 8px;
     }
