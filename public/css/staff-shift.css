@@ -15,6 +15,8 @@
 
     /* 背景色 */
     --shift-weekday-date-bg: #efefef;
+    /* 個人カレンダーの平日部分（日付帯・上段の曜日） */
+    --shift-personal-weekday-bg: #f7f7f7;
     --shift-saturday-bg: #d8e8f5;
     --shift-holiday-bg: #f8dfd3;
     --shift-today-bg: #d8efd0;
@@ -252,12 +254,12 @@ button:focus-visible {
     grid-template-columns: repeat(7, var(--shift-personal-cell-width));
 }
 
-/* 曜日見出し：日曜は薄いオレンジ、土曜は薄い青、月〜金は白です。 */
+/* 曜日見出し：日曜は薄いオレンジ、土曜は薄い青、月〜金は薄いグレーです。 */
 .personal-calendar__weekday {
     height: var(--shift-personal-weekday-height);
     border-right: 1px solid var(--shift-border-color);
     border-bottom: 1px solid var(--shift-border-color);
-    background: #ffffff;
+    background: var(--shift-personal-weekday-bg);
     font-size: 13px;
     font-weight: 700;
     line-height: calc(var(--shift-personal-weekday-height) - 1px);
@@ -282,7 +284,7 @@ button:focus-visible {
 .personal-calendar__date-header {
     height: var(--shift-personal-date-height);
     padding: 0 0 0 5px;
-    background: var(--shift-weekday-date-bg);
+    background: var(--shift-personal-weekday-bg);
     font-size: 12px;
     line-height: var(--shift-personal-date-height);
 }

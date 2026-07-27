@@ -26,7 +26,11 @@ class StaffShiftController extends Controller
             'personalShifts' => $this->mockService->personalShifts(),
             'stores' => $this->mockService->stores(),
             'today' => $today,
-            'query' => ['today' => $today],
+            /*
+             * todayは動作確認用に明示された場合だけリンクへ引き継ぎます。
+             * 通常表示で現在日をURLへ固定すると、日付が変わっても前日のままになるためです。
+             */
+            'query' => $this->todayQuery($request),
         ]);
     }
 
@@ -46,7 +50,7 @@ class StaffShiftController extends Controller
             'store' => $stores[$store],
             'storeCode' => $store,
             'today' => $today,
-            'query' => ['today' => $today],
+            'query' => $this->todayQuery($request),
         ]);
     }
 
@@ -64,6 +68,18 @@ class StaffShiftController extends Controller
             ?? $now->format('Y-m-d');
 
         return [$month, $today];
+    }
+
+    /**
+     * 有効なtodayがURLで明示された場合だけ、画面内リンクへ引き継ぎます。
+     *
+     * @return array<string, string>
+     */
+    private function todayQuery(Request $request): array
+    {
+        $today = $this->validDate((string) $request->query('today', ''));
+
+        return $today !== null ? ['today' => $today] : [];
     }
 
     private function validMonth(string $value): ?string
