@@ -11,7 +11,10 @@
         </colgroup>
         <thead>
             <tr>
-                <th class="store-shift-table__corner" scope="col" rowspan="2">{{ $store['name'] }}</th>
+                {{-- 左上セルに店舗名と店舗切り替えメニューを配置します。 --}}
+                <th class="store-shift-table__corner" scope="col" rowspan="2">
+                    @include('staff.partials.store-menu')
+                </th>
                 @foreach ($calendar['days'] as $day)
                     <th
                         class="store-shift-table__date-header {{ $day['date_class'] }}"

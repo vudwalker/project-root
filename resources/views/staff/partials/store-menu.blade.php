@@ -10,7 +10,11 @@
         aria-controls="store-menu-list"
         data-store-menu-trigger
     >
-        {{ $currentStoreCode && isset($stores[$currentStoreCode]) ? $stores[$currentStoreCode]['name'] : '店舗別' }}▼
+        @if ($currentStoreCode && isset($stores[$currentStoreCode]))
+            {{ $stores[$currentStoreCode]['name'] }} ▽
+        @else
+            店舗別▽
+        @endif
     </button>
 
     <div class="store-menu__list" id="store-menu-list" data-store-menu-list hidden>

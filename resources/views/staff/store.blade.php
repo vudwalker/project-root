@@ -13,11 +13,7 @@
             >TOP</a>
         </header>
 
-        <div class="store-content">
-            <div class="store-content__heading">
-                @include('staff.partials.store-menu')
-            </div>
-            @include('staff.partials.store-shift-table')
-        </div>
+        {{-- 店舗名・日付・シフト表はまとめて横スクロール領域に入れます。 --}}
+        @include('staff.partials.store-shift-table')
     </div>
 @endsection

@@ -1,17 +1,31 @@
+/*
+ * スタッフ用シフト画面のスタイルです。
+ * 色と寸法はCSS変数で管理し、参考画像に合わせています。
+ */
 :root {
-    --shift-border-color: #555555;
-    --shift-text-color: #222222;
-    --shift-weekday-bg: #f1f1f1;
-    --shift-saturday-bg: #dcecf8;
-    --shift-holiday-bg: #f8dfd1;
-    --shift-today-bg: #dff2d9;
+    /* 罫線の色（個人カレンダー用と店舗別表用） */
+    --shift-border-color: #666666;
+    --shift-store-border-color: #999999;
+
+    /* 背景色 */
+    --shift-weekday-date-bg: #efefef;
+    --shift-saturday-bg: #d8e8f5;
+    --shift-holiday-bg: #f8dfd3;
+    --shift-today-bg: #d8efd0;
     --shift-cell-bg: #ffffff;
-    --shift-personal-width: 560px;
-    --shift-personal-cell-width: 80px;
-    --shift-date-height: 24px;
-    --shift-personal-shift-height: 76px;
-    --shift-store-name-width: 120px;
-    --shift-store-date-width: 36px;
+
+    /* 個人カレンダーの寸法（この基準サイズ全体を等倍率で縮小します） */
+    --shift-personal-cell-width: 72px;
+    --shift-personal-width: calc(var(--shift-personal-cell-width) * 7);
+    --shift-personal-weekday-height: 25px;
+    --shift-personal-date-height: 21px;
+    --shift-personal-shift-height: 55px;
+
+    /* 店舗別表の寸法（縮小せず横スクロールで表示します） */
+    --shift-store-date-width: 30px;
+    --shift-staff-name-width: 110px;
+    --shift-store-header-height: 22px;
+    --shift-store-row-height: 24px;
 }
 
 * {
@@ -25,7 +39,7 @@ body {
 }
 
 body {
-    color: var(--shift-text-color);
+    color: #222222;
     background: #ffffff;
     font-family:
         -apple-system,
@@ -35,106 +49,103 @@ body {
         "Hiragino Kaku Gothic ProN",
         "Meiryo",
         sans-serif;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 a {
     color: inherit;
 }
 
-button,
-a {
-    -webkit-tap-highlight-color: transparent;
-}
-
 a:focus-visible,
 button:focus-visible {
     outline: 2px solid #2266aa;
-    outline-offset: 2px;
+    outline-offset: 1px;
 }
 
 .staff-page__main {
     width: 100%;
-    padding: 20px;
+    padding: 24px 20px;
 }
 
-.staff-screen--personal {
-    width: 100%;
-}
-
-.personal-scale-wrapper {
-    width: 100%;
-    overflow: hidden;
-}
-
-.personal-scale-content {
-    width: var(--shift-personal-width);
-    transform-origin: top left;
-}
+/* ============================================
+   共通ヘッダー（月切り替え・スタッフ名など）
+   ============================================ */
 
 .staff-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     width: var(--shift-personal-width);
-    min-height: 38px;
-    padding: 0 16px 10px;
+    padding: 0 2px 16px 22px;
 }
 
+/* 店舗別画面のヘッダーは左寄せでまとめ、横スクロールさせません。 */
 .staff-header--store {
-    width: 100%;
-    min-height: 46px;
-    padding: 0 0 10px;
+    width: auto;
+    justify-content: flex-start;
+    gap: 40px;
+    padding: 0 0 14px 16px;
 }
 
 .month-navigation {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
     white-space: nowrap;
 }
 
 .month-navigation__arrow {
     display: inline-block;
-    min-width: 24px;
-    color: #444444;
-    font-size: 22px;
+    min-width: 20px;
+    color: #333333;
+    font-size: 17px;
     line-height: 1;
     text-align: center;
     text-decoration: none;
 }
 
 .month-navigation__label {
-    min-width: 116px;
-    font-size: 20px;
+    font-size: 19px;
     font-weight: 700;
     text-align: center;
+    white-space: nowrap;
 }
 
 .staff-header__user {
     margin-left: auto;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 700;
     white-space: nowrap;
 }
 
-.staff-header__top-link {
-    margin-left: 18px;
-    font-size: 14px;
-    text-decoration: none;
+/* 店舗別画面ではスタッフ名を左寄せグループ内に置きます。 */
+.staff-header--store .staff-header__user {
+    margin-left: 0;
 }
+
+.staff-header__top-link {
+    font-size: 13px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+/* ============================================
+   店舗切り替えメニュー
+   ============================================ */
 
 .store-menu {
     position: relative;
-    margin-left: 14px;
+    margin-left: 12px;
+    white-space: nowrap;
 }
 
 .store-menu__trigger {
     padding: 2px 0;
     border: 0;
+    background: transparent;
     color: #333333;
     cursor: pointer;
-    font-size: 14px;
+    font-family: inherit;
+    font-size: 13px;
     white-space: nowrap;
 }
 
@@ -143,22 +154,28 @@ button:focus-visible {
     z-index: 5;
     top: 100%;
     right: 0;
-    min-width: 120px;
-    padding: 4px 0;
-    border: 1px solid var(--shift-border-color);
+    min-width: 110px;
+    padding: 2px 0;
+    border: 1px solid var(--shift-store-border-color);
     background: #ffffff;
+}
+
+/* 店舗別表の左上セル内では、メニューを左端に揃えて開きます。 */
+.store-shift-table__corner .store-menu__list {
+    right: auto;
+    left: 0;
 }
 
 .store-menu__link {
     display: block;
-    padding: 6px 10px;
+    padding: 5px 10px;
     text-decoration: none;
     white-space: nowrap;
 }
 
 .store-menu__link:hover,
 .store-menu__link[aria-current="page"] {
-    background: var(--shift-weekday-bg);
+    background: var(--shift-weekday-date-bg);
 }
 
 .store-menu__fallback {
@@ -168,6 +185,20 @@ button:focus-visible {
 
 .store-menu__fallback a {
     font-size: 12px;
+}
+
+/* ============================================
+   個人用月間カレンダー
+   ============================================ */
+
+.personal-scale-wrapper {
+    width: 100%;
+    overflow: hidden;
+}
+
+.personal-scale-content {
+    width: var(--shift-personal-width);
+    transform-origin: top left;
 }
 
 .personal-calendar {
@@ -182,13 +213,15 @@ button:focus-visible {
     grid-template-columns: repeat(7, var(--shift-personal-cell-width));
 }
 
+/* 曜日見出し：日曜は薄いオレンジ、土曜は薄い青、月〜金は白です。 */
 .personal-calendar__weekday {
-    height: var(--shift-date-height);
-    padding: 2px 0;
+    height: var(--shift-personal-weekday-height);
     border-right: 1px solid var(--shift-border-color);
     border-bottom: 1px solid var(--shift-border-color);
-    background: var(--shift-weekday-bg);
+    background: #ffffff;
+    font-size: 13px;
     font-weight: 700;
+    line-height: calc(var(--shift-personal-weekday-height) - 1px);
     text-align: center;
 }
 
@@ -202,16 +235,17 @@ button:focus-visible {
 
 .personal-calendar__day {
     min-width: 0;
-    height: calc(var(--shift-date-height) + var(--shift-personal-shift-height));
     border-right: 1px solid var(--shift-border-color);
     border-bottom: 1px solid var(--shift-border-color);
 }
 
+/* 日付部分の帯：曜日・祝日で色を決め、当日でも緑にしません。 */
 .personal-calendar__date-header {
-    height: var(--shift-date-height);
-    padding: 2px 0 0 5px;
-    background: var(--shift-weekday-bg);
-    line-height: 19px;
+    height: var(--shift-personal-date-height);
+    padding: 0 0 0 5px;
+    background: var(--shift-weekday-date-bg);
+    font-size: 12px;
+    line-height: var(--shift-personal-date-height);
 }
 
 .personal-calendar__date-header.is-saturday {
@@ -223,13 +257,13 @@ button:focus-visible {
     background: var(--shift-holiday-bg);
 }
 
+/* シフト部分：通常は白、当日だけ薄い緑です。 */
 .personal-calendar__shift-content {
     display: flex;
     height: var(--shift-personal-shift-height);
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
     background: var(--shift-cell-bg);
     text-align: center;
 }
@@ -242,26 +276,14 @@ button:focus-visible {
 .personal-calendar__shift-code {
     overflow: hidden;
     max-width: 100%;
+    font-size: 13px;
+    line-height: 1.4;
     white-space: nowrap;
 }
 
-.personal-calendar__shift-code {
-    font-weight: 700;
-}
-
-.store-content {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-.store-content__heading {
-    min-width: max-content;
-    padding: 0 0 8px;
-}
-
-.store-content__heading .store-menu {
-    margin-left: 0;
-}
+/* ============================================
+   店舗別月間シフト表
+   ============================================ */
 
 .store-shift-table-scroll {
     width: 100%;
@@ -271,14 +293,14 @@ button:focus-visible {
 
 .store-shift-table {
     width: max-content;
-    min-width: calc(var(--shift-store-name-width) + (31 * var(--shift-store-date-width)));
+    min-width: calc(var(--shift-staff-name-width) + (28 * var(--shift-store-date-width)));
     border-collapse: collapse;
     table-layout: fixed;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .store-shift-table__staff-column {
-    width: var(--shift-store-name-width);
+    width: var(--shift-staff-name-width);
 }
 
 .store-shift-table__date-column {
@@ -288,26 +310,37 @@ button:focus-visible {
 .store-shift-table th,
 .store-shift-table td {
     padding: 0;
-    border: 1px solid var(--shift-border-color);
+    border: 1px solid var(--shift-store-border-color);
 }
 
+/* 左上の店舗名セル（店舗切り替えメニューを含みます） */
 .store-shift-table__corner {
-    width: var(--shift-store-name-width);
-    min-width: var(--shift-store-name-width);
-    height: 48px;
-    background: var(--shift-weekday-bg);
-    font-weight: 700;
+    position: relative;
+    width: var(--shift-staff-name-width);
+    min-width: var(--shift-staff-name-width);
+    padding: 0 0 0 8px;
+    background: #ffffff;
+    font-weight: 400;
     text-align: left;
     vertical-align: middle;
 }
 
+.store-shift-table__corner .store-menu {
+    margin-left: 0;
+}
+
+.store-shift-table__corner .store-menu__trigger {
+    font-size: 14px;
+}
+
+/* 日付見出し・曜日見出し：月〜金は白、土曜は青、日曜・祝日はオレンジです。 */
 .store-shift-table__date-header,
 .store-shift-table__weekday-header {
     width: var(--shift-store-date-width);
     min-width: var(--shift-store-date-width);
-    height: 24px;
-    background: var(--shift-weekday-bg);
-    font-weight: 700;
+    height: var(--shift-store-header-height);
+    background: #ffffff;
+    font-weight: 400;
     text-align: center;
 }
 
@@ -324,22 +357,22 @@ button:focus-visible {
 }
 
 .store-shift-table__staff-name {
-    width: var(--shift-store-name-width);
-    min-width: var(--shift-store-name-width);
-    height: 48px;
-    padding-left: 6px;
+    width: var(--shift-staff-name-width);
+    min-width: var(--shift-staff-name-width);
+    height: var(--shift-store-row-height);
+    padding-left: 8px;
     background: #ffffff;
     font-weight: 400;
     text-align: left;
     white-space: nowrap;
 }
 
+/* シフトセル：通常は白、当日列だけ薄い緑です（見出しは緑にしません）。 */
 .store-shift-table__shift-cell {
     width: var(--shift-store-date-width);
     min-width: var(--shift-store-date-width);
-    height: 48px;
+    height: var(--shift-store-row-height);
     background: var(--shift-cell-bg);
-    font-weight: 700;
     text-align: center;
     vertical-align: middle;
 }
@@ -347,6 +380,10 @@ button:focus-visible {
 .store-shift-table__shift-cell.is-today {
     background: var(--shift-today-bg);
 }
+
+/* ============================================
+   補助クラス・スマートフォン向け調整
+   ============================================ */
 
 .visually-hidden {
     position: absolute;
@@ -362,16 +399,6 @@ button:focus-visible {
 
 @media (max-width: 600px) {
     .staff-page__main {
-        padding: 8px 0;
-    }
-
-    .staff-header {
-        padding-right: 8px;
-        padding-left: 8px;
-    }
-
-    .staff-header--store {
-        padding-right: 8px;
-        padding-left: 8px;
+        padding: 10px 8px;
     }
 }
