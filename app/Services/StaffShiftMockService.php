@@ -10,6 +10,11 @@ namespace App\Services;
  */
 class StaffShiftMockService
 {
+    public function __construct(
+        private readonly ShiftTypeMockService $shiftTypeService,
+    ) {
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -176,16 +181,16 @@ class StaffShiftMockService
     {
         // 参考画像（staff_top.png）と同じ日付・店舗の組み合わせです。
         return [
-            '2026-07-07' => [$this->personalShift(1, 'daianji', '大安寺', 3, 'C', 'C勤務')],
-            '2026-07-08' => [$this->personalShift(2, 'noda', '野田', 3, 'C', 'C勤務')],
-            '2026-07-12' => [$this->personalShift(2, 'noda', '野田', 3, 'C', 'C勤務')],
-            '2026-07-13' => [$this->personalShift(1, 'daianji', '大安寺', 3, 'C', 'C勤務')],
-            '2026-07-14' => [$this->personalShift(1, 'daianji', '大安寺', 3, 'C', 'C勤務')],
-            '2026-07-20' => [$this->personalShift(2, 'noda', '野田', 3, 'C', 'C勤務')],
-            '2026-07-21' => [$this->personalShift(1, 'daianji', '大安寺', 3, 'C', 'C勤務')],
-            '2026-07-22' => [$this->personalShift(1, 'daianji', '大安寺', 3, 'C', 'C勤務')],
-            '2026-07-26' => [$this->personalShift(2, 'noda', '野田', 3, 'C', 'C勤務')],
-            '2026-07-28' => [$this->personalShift(1, 'daianji', '大安寺', 3, 'C', 'C勤務')],
+            '2026-07-07' => [$this->personalShift(1, 'daianji', '大安寺', 'C')],
+            '2026-07-08' => [$this->personalShift(2, 'noda', '野田', 'C')],
+            '2026-07-12' => [$this->personalShift(2, 'noda', '野田', 'C')],
+            '2026-07-13' => [$this->personalShift(1, 'daianji', '大安寺', 'C')],
+            '2026-07-14' => [$this->personalShift(1, 'daianji', '大安寺', 'C')],
+            '2026-07-20' => [$this->personalShift(2, 'noda', '野田', 'C')],
+            '2026-07-21' => [$this->personalShift(1, 'daianji', '大安寺', 'C')],
+            '2026-07-22' => [$this->personalShift(1, 'daianji', '大安寺', 'C')],
+            '2026-07-26' => [$this->personalShift(2, 'noda', '野田', 'C')],
+            '2026-07-28' => [$this->personalShift(1, 'daianji', '大安寺', 'C')],
         ];
     }
 
@@ -199,11 +204,7 @@ class StaffShiftMockService
 
         foreach ($codes as $date => $code) {
             $shifts[$date] = [
-                'shift_type' => [
-                    'id' => ord($code),
-                    'code' => $code,
-                    'name' => $code.'勤務',
-                ],
+                'shift_type' => $this->shiftTypeService->getByCode($code),
             ];
         }
 
@@ -217,19 +218,13 @@ class StaffShiftMockService
         int $storeId,
         string $storeCode,
         string $storeName,
-        int $shiftTypeId,
-        string $code,
-        string $name,
+        string $shiftTypeCode,
     ): array {
         return [
             'store_id' => $storeId,
             'store_code' => $storeCode,
             'store_name' => $storeName,
-            'shift_type' => [
-                'id' => $shiftTypeId,
-                'code' => $code,
-                'name' => $name,
-            ],
+            'shift_type' => $this->shiftTypeService->getByCode($shiftTypeCode),
         ];
     }
 }
