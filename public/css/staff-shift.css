@@ -23,6 +23,8 @@
 
     /* 店舗別表の寸法（縮小せず横スクロールで表示します） */
     --shift-store-date-width: 30px;
+    /* 氏名列幅は .store-shift-table 側で font-size に合わせて再定義します */
+    --shift-staff-name-padding-left: 8px;
     --shift-staff-name-width: 110px;
     --shift-store-header-height: 22px;
     --shift-store-row-height: 24px;
@@ -197,12 +199,21 @@ button:focus-visible {
 }
 
 .personal-scale-content {
-    width: var(--shift-personal-width);
+    /*
+     * 中身（カレンダー本体 = 7列 + 外枠1px）に合わせて幅を決めます。
+     * 固定幅にすると外枠の1px分がはみ出し、右端の罫線が切れるためです。
+     */
+    width: max-content;
     transform-origin: top left;
 }
 
 .personal-calendar {
-    width: var(--shift-personal-width);
+    /*
+     * 幅は「7列分 + 左罫線1px」を自動で確保します。
+     * （固定幅504pxだと border-box のため中身が503pxになり、
+     *   7列分のグリッドが右へ1pxはみ出して右端の罫線が消えます）
+     */
+    width: max-content;
     border-top: 1px solid var(--shift-border-color);
     border-left: 1px solid var(--shift-border-color);
 }
@@ -293,8 +304,20 @@ button:focus-visible {
 
 .store-shift-table {
     width: max-content;
+    /* 氏名左の余白は半角スペース1文字分（約0.5em）だけにします */
+    --shift-staff-name-padding-left: 0.5em;
+    /* 列幅は漢字6文字分 + 左余白 */
+    --shift-staff-name-width: calc(6em + 0.5em);
     min-width: calc(var(--shift-staff-name-width) + (28 * var(--shift-store-date-width)));
-    border-collapse: collapse;
+    /* sticky 列と相性が良いよう collapse ではなく separate を使う */
+    border-collapse: separate;
+    border-spacing: 0;
+    /*
+     * 外枠は上だけテーブルに引きます。
+     * 左端の線は横スクロールで固定される氏名列のセル側に引きます。
+     * （テーブル側に引くとスクロール時に線ごと流れて消えるため）
+     */
+    border-top: 1px solid var(--shift-store-border-color);
     table-layout: fixed;
     font-size: 12px;
 }
@@ -310,16 +333,41 @@ button:focus-visible {
 .store-shift-table th,
 .store-shift-table td {
     padding: 0;
-    border: 1px solid var(--shift-store-border-color);
+    border-top: 0;
+    border-left: 0;
+    border-right: 1px solid var(--shift-store-border-color);
+    border-bottom: 1px solid var(--shift-store-border-color);
 }
 
-/* 左上の店舗名セル（店舗切り替えメニューを含みます） */
-.store-shift-table__corner {
-    position: relative;
+/*
+ * 氏名列（左上セル含む）は、横スクロールで「列の半分」まで隠れたら固定します。
+ * left を列幅の半分だけマイナスにすることで、
+ * 残り半分は常に画面左端に見え続けます。
+ */
+th.store-shift-table__corner,
+th.store-shift-table__staff-name {
+    position: sticky;
+    left: calc(var(--shift-staff-name-width) / -2);
+    z-index: 2;
+    background: #ffffff;
+    /*
+     * 表の左端の罫線。固定列に付けることでスクロールしても残ります。
+     * ※「.store-shift-table th」の border-left: 0 より優先させるため、
+     *   th 付きのセレクタにしています。
+     */
+    border-left: 1px solid var(--shift-store-border-color);
+}
+
+/*
+ * 左上の店舗名セル（店舗切り替えメニューを含みます）
+ * ※「.store-shift-table th」の padding: 0 より優先させるため、
+ *   th 付きのセレクタで指定しています。
+ */
+th.store-shift-table__corner {
+    z-index: 3;
     width: var(--shift-staff-name-width);
     min-width: var(--shift-staff-name-width);
-    padding: 0 0 0 8px;
-    background: #ffffff;
+    padding: 0 0 0 var(--shift-staff-name-padding-left);
     font-weight: 400;
     text-align: left;
     vertical-align: middle;
@@ -356,11 +404,16 @@ button:focus-visible {
     background: var(--shift-holiday-bg);
 }
 
-.store-shift-table__staff-name {
+/*
+ * 氏名セル
+ * ※「.store-shift-table th」の padding: 0 より優先させるため、
+ *   th 付きのセレクタで指定しています。
+ */
+th.store-shift-table__staff-name {
     width: var(--shift-staff-name-width);
     min-width: var(--shift-staff-name-width);
     height: var(--shift-store-row-height);
-    padding-left: 8px;
+    padding-left: var(--shift-staff-name-padding-left);
     background: #ffffff;
     font-weight: 400;
     text-align: left;

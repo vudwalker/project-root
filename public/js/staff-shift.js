@@ -25,11 +25,22 @@
             scheduled = false;
 
             var originalWidth = content.offsetWidth;
+            var originalHeight = content.offsetHeight;
             var availableWidth = wrapper.clientWidth;
+
+            // 最大倍率は1（PCでは拡大しない）
             var scale = Math.min(1, availableWidth / originalWidth);
 
+            // 縮小時は丸め誤差で右端の罫線が切れやすいため、
+            // 1px分の余裕を持たせて倍率を決めます。
+            if (scale < 1) {
+                scale = Math.max(0, (availableWidth - 1) / originalWidth);
+            }
+
             content.style.transform = 'scale(' + scale + ')';
-            wrapper.style.height = (content.offsetHeight * scale) + 'px';
+
+            // 高さは切り捨てだと下端の罫線が切れるため、切り上げます。
+            wrapper.style.height = Math.ceil(originalHeight * scale) + 'px';
         }
 
         function scheduleResize() {
