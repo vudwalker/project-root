@@ -82,7 +82,7 @@ button:focus-visible {
 .staff-header--store {
     width: auto;
     justify-content: flex-start;
-    gap: 40px;
+    gap: 39px;
     padding: 0 0 14px 16px;
 }
 
