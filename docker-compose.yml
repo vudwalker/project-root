@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: project-root-app
+    ports:
+      - "8080:80"
+    volumes:
+      # ソース変更をコンテナへ即時反映するための開発用マウントです。
+      - ./:/var/www/html
+    environment:
+      APACHE_DOCUMENT_ROOT: /var/www/html/public
+    restart: unless-stopped
+
