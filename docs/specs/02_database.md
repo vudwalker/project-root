@@ -1,0 +1,956 @@
+# データベース設計仕様
+
+## 1. 目的
+
+本書は、シフト管理Webアプリで使用するPostgreSQLのテーブル構造、リレーション、制約、保存方針を定義する。
+
+MigrationやModelの実装前に、必ず以下を確認すること。
+
+- `AGENTS.md`
+- `docs/specs/01_requirements.md`
+- `docs/specs/03_staff_ui.md`
+- `docs/specs/04_admin_ui.md`
+- 現在のMigration
+- 現在のModel
+- 現在のService
+- 現在のSeeder
+- 現在のシフトデータ生成・変換処理
+
+本書と同等の責務を持つ既存実装がある場合は、重複したクラスやテーブルを新規作成せず、既存実装を優先して拡張する。
+
+本書・既存コード・依頼内容に重大な矛盾がある場合は、Migrationを実行せずに報告する。
+
+---
+
+## 2. 基本方針
+
+### 2.1 使用データベース
+
+データベースはPostgreSQLを使用する。
+
+開発環境ではDocker Compose上のPostgreSQLコンテナを使用する。
+
+Laravelからの接続には`pdo_pgsql`を使用する。
+
+### 2.2 Eloquentの使用
+
+データ取得と保存にはEloquentを使用する。
+
+Controllerには、SQL、複雑な集計処理、権限判定、画面用データ変換を直接書かない。
+
+必要に応じて以下へ責務を分離する。
+
+- Model
+- Service
+- Form Request
+- Policy
+- Query用クラス
+- DTOまたはViewModel
+
+### 2.3 シフトデータの原本
+
+シフトデータは共通の原本として管理する。
+
+以下の画面は、同じシフトデータを異なる軸に変換して表示する。
+
+- 管理画面・店舗別
+- 管理画面・スタッフ別
+- スタッフ用個人カレンダー
+- スタッフ用店舗別画面
+
+画面ごとに独立したシフトデータを保存してはならない。
+
+画面表示用に整形した配列やCollectionは、永続データとして保存しない。
+
+### 2.4 下書きと公開版
+
+管理画面は、常に最新の下書きを表示する。
+
+スタッフ用画面は、最後に配布された公開版だけを表示する。
+
+配布後に下書きを編集しても、シフト管理者またはシステム管理者が再度「配布」を実行するまで、スタッフ用画面の内容は変更しない。
+
+公開履歴は複数世代保持せず、店舗・対象月ごとに最新の公開版だけを保持する。
+
+### 2.5 値の固定を避ける
+
+権限、状態、シフトコード等をPostgreSQLのENUM型へ固定しない。
+
+文字列カラム、マスタテーブル、CHECK制約、Laravel側のEnumクラス等を使用する。
+
+### 2.6 削除と非表示
+
+以下を区別する。
+
+- 一時的または業務上利用しない  
+  → `status`または`is_active`で管理
+- 管理画面上から削除する  
+  → 原則としてSoft Delete
+- 関連データがなく完全削除しても問題ない  
+  → システム管理者のみ物理削除可能
+
+過去のシフトや所属履歴から参照されているデータは、物理削除しない。
+
+---
+
+## 3. テーブル一覧
+
+### 3.1 業務テーブル
+
+1. `organizations`
+2. `stores`
+3. `users`
+4. `roles`
+5. `role_user`
+6. `store_user`
+7. `store_shift_manager`
+8. `store_shift_patterns`
+9. `shift_schedules`
+10. `shifts`
+11. `published_shifts`
+
+### 3.2 Laravel標準テーブル
+
+必要に応じて以下を使用する。
+
+- `password_reset_tokens`
+- `sessions`
+- `cache`
+- `cache_locks`
+- `jobs`
+- `job_batches`
+- `failed_jobs`
+
+既存のLaravel標準Migrationがある場合は、重複して作成しない。
+
+---
+
+## 4. organizations
+
+将来の複数企業対応を考慮した組織テーブル。
+
+初期運用では1組織だけSeederで登録する。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| name | varchar(255) | 不可 | 組織名 |
+| code | varchar(100) | 不可 | 組織識別コード |
+| is_active | boolean | 不可 | 利用可能状態 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+| deleted_at | timestamp | 可 | 論理削除日時 |
+
+制約：
+
+- `code`は一意
+- `is_active`の初期値は`true`
+- Soft Deleteを使用する
+
+リレーション：
+
+```text
+Organization
+├── hasMany Stores
+└── hasMany Users
+```
+
+---
+
+## 5. stores
+
+店舗情報を管理する。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| organization_id | bigint | 不可 | 所属組織 |
+| code | varchar(100) | 不可 | 店舗識別コード |
+| name | varchar(255) | 不可 | 店舗名 |
+| status | varchar(30) | 不可 | 店舗状態 |
+| display_order | integer | 不可 | 店舗一覧の表示順 |
+| staffing_check_mode | varchar(30) | 不可 | 人数チェック方式 |
+| required_staff_count | integer | 可 | 固定必要人数 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+| deleted_at | timestamp | 可 | 論理削除日時 |
+
+`status`の想定値：
+
+- `active`
+- `suspended`
+- `closed`
+
+`staffing_check_mode`の想定値：
+
+- `disabled`
+- `fixed_total`
+
+制約：
+
+- `organization_id + code`を一意にする
+- `display_order`の初期値は`0`
+- `organization_id`は`organizations.id`への外部キー
+- `required_staff_count`は0以上
+- `fixed_total`の場合は`required_staff_count`を必須とする
+- Soft Deleteを使用する
+
+人数チェック：
+
+- `disabled`
+  - 人数判定を行わない
+  - 管理画面の判定欄は`－`表示
+  - 配布時の人数検証対象外
+- `fixed_total`
+  - 日別の出勤人数と`required_staff_count`を比較
+  - 不一致の場合は不備とする
+  - 配布時の検証対象とする
+
+同一スタッフが同日に同一店舗で2シフト連勤している場合も、出勤人数は1人として数える。
+
+人数チェックではシフト行数ではなく、日別の重複しない`user_id`数を数える。
+
+リレーション：
+
+```text
+Store
+├── belongsTo Organization
+├── belongsToMany Users through store_user
+├── belongsToMany ShiftManagers through store_shift_manager
+├── hasMany StoreShiftPatterns
+└── hasMany ShiftSchedules
+```
+
+---
+
+## 6. users
+
+スタッフ、シフト管理者、システム管理者を共通管理する。
+
+一人のユーザーが複数権限を持てる。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| organization_id | bigint | 不可 | 所属組織 |
+| primary_store_id | bigint | 可 | 主所属店舗 |
+| name | varchar(255) | 不可 | 氏名 |
+| email | varchar(255) | 不可 | ログイン用メールアドレス |
+| password | varchar(255) | 不可 | ハッシュ化パスワード |
+| status | varchar(30) | 不可 | 在籍状態 |
+| email_verified_at | timestamp | 可 | メール確認日時 |
+| remember_token | varchar(100) | 可 | ログイン保持用 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+| deleted_at | timestamp | 可 | 論理削除日時 |
+
+`status`の想定値：
+
+- `active`
+- `on_leave`
+- `retired`
+
+制約：
+
+- `organization_id + email`を一意にする
+- `organization_id`は`organizations.id`への外部キー
+- `primary_store_id`は`stores.id`への外部キー
+- 主所属店舗は同一組織の店舗でなければならない
+- スタッフ権限を持つ有効なユーザーには、原則として主所属店舗を設定する
+- 主所属店舗は、そのユーザーの有効な所属店舗に含まれていなければならない
+- 主所属店舗の整合性はアプリケーション側でも検証する
+- Soft Deleteを使用する
+- 過去シフトがあるユーザーは物理削除しない
+
+リレーション：
+
+```text
+User
+├── belongsTo Organization
+├── belongsTo PrimaryStore
+├── belongsToMany Roles
+├── belongsToMany Stores through store_user
+├── belongsToMany ManagedStores through store_shift_manager
+├── hasMany Shifts
+└── hasMany PublishedShifts
+```
+
+---
+
+## 7. roles
+
+権限マスタ。
+
+初期データ：
+
+- `staff`
+- `shift_manager`
+- `system_admin`
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| code | varchar(100) | 不可 | 権限コード |
+| name | varchar(255) | 不可 | 表示名称 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+
+制約：
+
+- `code`は一意
+
+権限の意味：
+
+### staff
+
+- 自分のシフトを閲覧できる
+- 自分が所属する店舗のシフトを閲覧できる
+- 管理画面での編集はできない
+
+### shift_manager
+
+- 担当店舗のシフトを閲覧・編集できる
+- 担当店舗のシフトを配布できる
+- 担当店舗情報とシフトパターンを追加・編集できる
+- 主所属店舗が担当店舗であるスタッフ情報を追加・編集できる
+- 担当外店舗は編集できない
+
+### system_admin
+
+- 全店舗を閲覧・編集できる
+- 全店舗のシフトを配布できる
+- 店舗・スタッフ・権限・担当店舗を管理できる
+
+---
+
+## 8. role_user
+
+ユーザーと権限の中間テーブル。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| user_id | bigint | 不可 | ユーザーID |
+| role_id | bigint | 不可 | 権限ID |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+
+制約：
+
+- `user_id + role_id`を一意にする
+- `user_id`は`users.id`への外部キー
+- `role_id`は`roles.id`への外部キー
+
+例：
+
+```text
+スタッフ兼シフト管理者
+├── staff
+└── shift_manager
+```
+
+---
+
+## 9. store_user
+
+スタッフの所属店舗を管理する。
+
+スタッフは複数店舗へ所属できる。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| store_id | bigint | 不可 | 店舗ID |
+| user_id | bigint | 不可 | スタッフID |
+| display_order | integer | 不可 | 店舗内のスタッフ表示順 |
+| is_active | boolean | 不可 | 現在有効な所属か |
+| started_on | date | 可 | 所属開始日 |
+| ended_on | date | 可 | 所属終了日 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+
+制約：
+
+- `store_id + user_id`を一意にする
+- `display_order`の初期値は`0`
+- `is_active`の初期値は`true`
+- `store_id`は`stores.id`への外部キー
+- `user_id`は`users.id`への外部キー
+- `ended_on`は`started_on`以降とする
+- 主所属店舗は`users.primary_store_id`で管理する
+
+店舗別シフト表のスタッフ行は、以下の順で並べる。
+
+1. `store_user.display_order`
+2. スタッフ名
+3. ユーザーID
+
+所属を解除しても、過去シフトを保持するためレコードを削除せず、原則として`is_active = false`にする。
+
+---
+
+## 10. store_shift_manager
+
+シフト管理者の担当店舗を管理する。
+
+スタッフとしての所属店舗とは別の関係として管理する。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| store_id | bigint | 不可 | 担当店舗 |
+| user_id | bigint | 不可 | シフト管理者 |
+| is_active | boolean | 不可 | 現在有効な担当か |
+| started_on | date | 可 | 担当開始日 |
+| ended_on | date | 可 | 担当終了日 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+
+制約：
+
+- `store_id + user_id`を一意にする
+- 一人のシフト管理者は複数店舗を担当可能
+- 有効なシフト管理者は、原則として1店舗につき1人
+- `is_active = true`の`store_id`を一意にする部分インデックスを設定する
+- `user_id`には`shift_manager`権限が必要
+- システム管理者は、このテーブルに登録されていなくても全店舗を操作可能
+- 担当店舗の割り当て変更はシステム管理者のみ可能
+
+権限判定：
+
+```text
+system_admin
+→ 全店舗を操作可能
+
+shift_manager
+→ store_shift_managerで有効な担当店舗のみ操作可能
+
+staff
+→ 管理画面の編集不可
+```
+
+---
+
+## 11. store_shift_patterns
+
+店舗ごとのシフトパターンを管理する。
+
+同じコードでも店舗ごとに勤務時間が異なるため、店舗別に独立したレコードとして保持する。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| store_id | bigint | 不可 | 店舗ID |
+| code | varchar(20) | 不可 | シフトコード |
+| work_minutes | integer | 不可 | 勤務時間数 |
+| display_order | integer | 不可 | 入力ボタンの表示順 |
+| is_active | boolean | 不可 | 現在使用可能か |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+| deleted_at | timestamp | 可 | 論理削除日時 |
+
+初期コード：
+
+- A
+- B
+- C
+- D
+- E
+- 研
+- 有
+
+制約：
+
+- `store_id + code`を一意にする
+- `work_minutes`は0以上
+- `display_order`の初期値は`0`
+- `is_active`の初期値は`false`
+- 入力ボタンには`is_active = true`のパターンだけを表示する
+- Soft Deleteを使用する
+- 使用済みパターンは物理削除しない
+
+勤務時間数は分単位で保存する。
+
+例：
+
+```text
+7時間30分
+→ 450
+```
+
+`研`は勤務時間が不定のため、初期値を0分とする。
+
+`有`は運用ルールが確定するまで、初期値を0分とする。
+
+全店舗についてA、B、C、D、E、研、有のレコードをSeederで作成し、店舗ごとに`is_active`と`work_minutes`を設定する。
+
+同じCであっても、店舗ごとに別の勤務時間を設定できる。
+
+```text
+大安寺 C
+→ 450分
+
+野田 C
+→ 390分
+```
+
+---
+
+## 12. shift_schedules
+
+店舗・対象月単位のシフト管理レコード。
+
+下書きと公開状態のメタデータを保持する。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| store_id | bigint | 不可 | 対象店舗 |
+| target_month | date | 不可 | 対象月の月初日 |
+| draft_version | bigint | 不可 | 下書きバージョン |
+| published_version | bigint | 可 | 最終配布したバージョン |
+| shift_updated_at | timestamp | 可 | シフト内容の最終更新日時 |
+| published_at | timestamp | 可 | 最終配布日時 |
+| published_by | bigint | 可 | 最終配布者 |
+| created_by | bigint | 可 | 作成者 |
+| updated_by | bigint | 可 | 最終更新者 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | Laravel標準更新日時 |
+
+制約：
+
+- `store_id + target_month`を一意にする
+- `target_month`には月初日を保存する
+- `draft_version`の初期値は`0`
+- `published_version`がNULLなら未配布
+- `draft_version`と`published_version`は0以上
+- `published_by`、`created_by`、`updated_by`は`users.id`への外部キー
+
+状態判定：
+
+```text
+未配布
+→ published_versionがNULL
+
+配布済み
+→ published_version = draft_version
+
+再配布が必要
+→ published_version < draft_version
+```
+
+`updated_at`を業務上のシフト最終更新日時として使用しない。
+
+シフト内容が追加・変更・削除された場合だけ、`shift_updated_at`を更新する。
+
+---
+
+## 13. shifts
+
+管理画面で編集する最新の下書きシフト。
+
+同一スタッフが同日・同一店舗で連続した複数シフトを持つことを許可する。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| shift_schedule_id | bigint | 不可 | 店舗・対象月の管理レコード |
+| user_id | bigint | 不可 | スタッフID |
+| work_date | date | 不可 | 勤務日 |
+| store_shift_pattern_id | bigint | 不可 | 店舗別シフトパターン |
+| sequence | smallint | 不可 | 同一セル内の表示順 |
+| pattern_code | varchar(20) | 不可 | 保存時点のコード |
+| work_minutes | integer | 不可 | 保存時点の勤務時間数 |
+| created_by | bigint | 可 | 入力者 |
+| updated_by | bigint | 可 | 最終更新者 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+
+制約：
+
+- `shift_schedule_id + user_id + work_date + sequence`を一意にする
+- `sequence`は1以上
+- `work_minutes`は0以上
+- `work_date`は`shift_schedule.target_month`と同じ月でなければならない
+- シフトパターンは対象店舗のパターンでなければならない
+- スタッフは対象店舗へ所属していなければならない
+- 同日・同一店舗の複数シフトを許可する
+- 同日・異なる店舗への登録もDB上は許可する
+- 同日・異なる店舗への登録はアプリケーション側で警告する
+- 同日・異なる店舗の重複が残る場合は配布不可
+
+連続2シフトの例：
+
+| 店舗 | 日付 | スタッフ | コード | sequence |
+|---|---|---|---|---:|
+| 大安寺 | 2026-07-10 | 近澤幸次 | A | 1 |
+| 大安寺 | 2026-07-10 | 近澤幸次 | C | 2 |
+
+重複勤務の判定：
+
+```text
+同一スタッフ
+かつ同一日
+かつ異なる店舗が2件以上
+→ 重複勤務
+```
+
+同一店舗内の連続2シフトは、重複勤務として扱わない。
+
+`pattern_code`と`work_minutes`には、シフト入力時点の店舗別シフトパターンを複写する。
+
+後から店舗別シフトパターンを変更しても、既存シフトのコードや勤務時間を自動変更しない。
+
+---
+
+## 14. published_shifts
+
+スタッフ用画面に表示する最新の公開版。
+
+配布時に、対象店舗・対象月の`shifts`をコピーして作成する。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| shift_schedule_id | bigint | 不可 | 店舗・対象月の管理レコード |
+| user_id | bigint | 不可 | スタッフID |
+| work_date | date | 不可 | 勤務日 |
+| sequence | smallint | 不可 | 同一セル内の表示順 |
+| pattern_code | varchar(20) | 不可 | 配布時点のコード |
+| work_minutes | integer | 不可 | 配布時点の勤務時間数 |
+| published_at | timestamp | 不可 | 配布日時 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+
+制約：
+
+- `shift_schedule_id + user_id + work_date + sequence`を一意にする
+- 店舗別シフトパターンへの外部キーは持たない
+- 配布時点のコードと勤務時間数をスナップショットとして保持する
+- 再配布時は、その`shift_schedule_id`の既存公開版を置き換える
+- 公開版の置換はトランザクション内で行う
+
+スタッフ用画面は`published_shifts`だけを参照し、下書きの`shifts`を直接参照しない。
+
+未配布の月には、以下のような案内を表示する。
+
+```text
+この月のシフトはまだ配布されていません。
+```
+
+スタッフ用画面の最終配布日時には、`shift_schedules.published_at`を使用する。
+
+---
+
+## 15. 自動保存
+
+管理画面・店舗別のセル入力と削除は、`fetch()`を使用して非同期保存する。
+
+保存APIは以下を実行する。
+
+1. ログイン確認
+2. 権限確認
+3. 担当店舗確認
+4. 対象月確認
+5. シフトパターン確認
+6. スタッフの所属店舗確認
+7. シフトの追加・更新・削除
+8. `draft_version`を加算
+9. `shift_updated_at`を更新
+10. `updated_by`を更新
+11. 重複勤務を再判定
+12. 保存結果をJSONで返す
+
+同日・異なる店舗への登録がある場合も、下書き保存自体は許可する。
+
+複数のセル変更は、500〜1000ms程度のdebounce後にまとめて送信する。
+
+保存失敗時は、画面上の入力内容を消さずに保持する。
+
+レスポンスには最低限、以下を含める。
+
+- 保存成功・失敗
+- 最新の`draft_version`
+- 保存日時
+- 重複勤務情報
+- 人数チェック結果
+- エラーメッセージ
+
+楽観ロックを使用する場合は、リクエストに画面側の`draft_version`を含める。
+
+DB上の`draft_version`と一致しない場合は、無条件に上書きせず競合として返す。
+
+---
+
+## 16. 配布
+
+配布機能は今回の実装範囲外だが、DB構造は対応させる。
+
+配布時の想定処理：
+
+1. ログイン確認
+2. 配布権限確認
+3. 対象店舗・対象月の下書き取得
+4. 未保存変更がないことを確認
+5. 同一スタッフの同日複数店舗勤務を検証
+6. 人数チェックが有効な場合は固定人数を検証
+7. 不備があれば配布を中止
+8. 既存の`published_shifts`を削除
+9. 最新の`shifts`を`published_shifts`へコピー
+10. `published_version = draft_version`へ更新
+11. `published_at`と`published_by`を更新
+12. トランザクションを確定
+
+強制配布機能は設けない。
+
+同一スタッフの同日複数店舗勤務が1件でも残っている場合は配布不可とする。
+
+配布後に下書きを変更した場合は、以下の状態になる。
+
+```text
+published_version < draft_version
+```
+
+この場合、管理画面には「再配布が必要」と表示する。
+
+スタッフ用画面には、再配布されるまで編集前の公開版を表示する。
+
+---
+
+## 17. 削除方針
+
+### 17.1 状態変更
+
+業務上利用しない状態は、`status`または`is_active`で管理する。
+
+例：
+
+- スタッフの休職・退職
+- 店舗の休止・閉鎖
+- 店舗所属の終了
+- シフト管理担当の終了
+- シフトパターンの無効化
+
+### 17.2 論理削除
+
+以下は原則としてSoft Deleteを使用する。
+
+- `organizations`
+- `stores`
+- `users`
+- `store_shift_patterns`
+
+### 17.3 物理削除
+
+関連データが一切存在しない場合だけ、システム管理者が物理削除できる。
+
+以下から参照されているデータは物理削除しない。
+
+- シフト
+- 公開シフト
+- 所属履歴
+- 担当履歴
+- 配布記録
+
+---
+
+## 18. インデックス
+
+最低限、以下を設定する。
+
+### organizations
+
+- `code`
+
+### stores
+
+- `organization_id`
+- `organization_id + code`
+- `status`
+- `display_order`
+
+### users
+
+- `organization_id`
+- `organization_id + email`
+- `primary_store_id`
+- `status`
+
+### role_user
+
+- `user_id + role_id`
+
+### store_user
+
+- `store_id + user_id`
+- `store_id + is_active + display_order`
+- `user_id + is_active`
+
+### store_shift_manager
+
+- `store_id + user_id`
+- `store_id + is_active`
+- `user_id + is_active`
+
+### store_shift_patterns
+
+- `store_id + code`
+- `store_id + is_active + display_order`
+
+### shift_schedules
+
+- `store_id + target_month`
+- `target_month`
+- `published_at`
+
+### shifts
+
+- `shift_schedule_id`
+- `user_id + work_date`
+- `work_date`
+- `store_shift_pattern_id`
+
+### published_shifts
+
+- `shift_schedule_id`
+- `user_id + work_date`
+- `work_date`
+
+重複勤務判定で頻繁に使用するため、`user_id + work_date`の複合インデックスは必須とする。
+
+---
+
+## 19. Seeder
+
+初期データはSeederで投入する。
+
+Seederには以下を含める。
+
+- 初期組織1件
+- 大安寺
+- 野田
+- 参考画像に存在するスタッフ
+- 権限
+  - `staff`
+  - `shift_manager`
+  - `system_admin`
+- ユーザーへの複数権限割り当て
+- スタッフの所属店舗
+- 主所属店舗
+- 店舗ごとのスタッフ表示順
+- シフト管理者の担当店舗
+- 店舗別シフトパターン
+  - A
+  - B
+  - C
+  - D
+  - E
+  - 研
+  - 有
+- 参考画像に対応する下書きシフト
+- 動作確認用の公開シフト
+- ダミーのメールアドレス
+- ダミーのパスワード
+
+パスワードはLaravelのHash機能でハッシュ化する。
+
+Seederは可能な範囲で再実行可能な構造にする。
+
+開発中は以下の実行を許可する。
+
+```bash
+php artisan migrate:fresh --seed
+```
+
+ただし、Agentはユーザーの承認前に実行してはならない。
+
+---
+
+## 20. Migration作成順
+
+外部キー依存関係を考慮し、原則として以下の順で作成する。
+
+1. `organizations`
+2. `stores`
+3. `users`
+4. `roles`
+5. `role_user`
+6. `store_user`
+7. `store_shift_manager`
+8. `store_shift_patterns`
+9. `shift_schedules`
+10. `shifts`
+11. `published_shifts`
+12. Laravel標準テーブル
+
+既存Migrationがある場合は、新規作成前に内容と依存関係を確認する。
+
+特に既存の`users`テーブルがある場合は、別の`users`テーブルを作成せず、既存Migrationを変更または追加Migrationで拡張する。
+
+---
+
+## 21. Migration実行前の報告
+
+Migrationを実行する前に、Agentは以下を報告する。
+
+- 現在存在するMigration
+- 新規作成するMigration
+- 変更するMigration
+- テーブル一覧
+- カラム一覧
+- 外部キー
+- 一意制約
+- CHECK制約
+- インデックス
+- Soft Delete対象
+- 既存コードへの影響
+- 既存モックデータ処理への影響
+- 想定されるリスク
+
+ユーザーの承認前に、以下を実行してはならない。
+
+```bash
+php artisan migrate
+php artisan migrate:fresh
+php artisan migrate:fresh --seed
+```
+
+---
+
+## 22. 完了確認
+
+実装後は、ユーザーの承認を得たうえで以下を確認する。
+
+```bash
+php artisan migrate:fresh --seed
+php artisan migrate:status
+php artisan route:list
+```
+
+確認事項：
+
+- PostgreSQLへ正常に接続できる
+- 全Migrationが成功する
+- Seederが成功する
+- 本物のログイン認証が動作する
+- 一人のユーザーが複数権限を持てる
+- スタッフが複数店舗へ所属できる
+- 主所属店舗を設定できる
+- 店舗ごとのスタッフ表示順を保持できる
+- シフト管理者が複数店舗を担当できる
+- 担当外店舗の編集を拒否できる
+- システム管理者が全店舗を編集できる
+- 店舗ごとのシフトパターンを保持できる
+- 同じコードでも店舗ごとに勤務時間を変更できる
+- 無効なシフトパターンが入力ボタンに表示されない
+- 同日・同一店舗の連続2シフトを保存できる
+- 同日・異なる店舗のシフトをDB上に保存できる
+- 同日・異なる店舗の重複を検出できる
+- 重複勤務が残る場合に配布不可と判定できる
+- 人数チェック無効時に`－`を表示できる
+- 人数チェックでスタッフ数を重複なしで集計できる
+- 下書きと公開版が分離される
+- 配布後の編集が公開版へ即時反映されない
+- `published_version < draft_version`で再配布必要を判定できる
+- シフト最終更新日時を取得できる
+- 最終配布日時を取得できる
+- 既存スタッフ用画面のUIとスクロール動作が壊れていない
