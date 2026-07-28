@@ -1,0 +1,13 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "project-root PostgreSQL",
+            "Group": "Servers",
+            "Host": "postgres",
+            "Port": 5432,
+            "MaintenanceDB": "shift_management",
+            "Username": "shift_user",
+            "SSLMode": "prefer"
+        }
+    }
+}

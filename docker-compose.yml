@@ -4,6 +4,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: project-root-app
+    # PostgreSQLが接続可能になってからLaravelコンテナを起動します。
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:80"
     volumes:
@@ -18,3 +22,54 @@ services:
       QUEUE_CONNECTION: sync
     restart: unless-stopped
 
+  postgres:
+    # バージョンを固定し、意図しないメジャーアップデートを防ぎます。
+    image: postgres:17-alpine
+    container_name: project-root-postgres
+    environment:
+      # 値はプロジェクト直下の.envから読み込みます。
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${APP_TIMEZONE:-Asia/Tokyo}
+    ports:
+      # ホスト側のポートはDB_FORWARD_PORTで変更できます。
+      - "${DB_FORWARD_PORT:-5432}:5432"
+    volumes:
+      # コンテナを作り直してもDBデータが消えないようにします。
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # $$はコンテナ内の環境変数を参照するための記述です。
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  pgadmin:
+    # PostgreSQLをブラウザから管理するためのpgAdmin専用コンテナです。
+    image: dpage/pgadmin4:9.5
+    container_name: project-root-pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # pgAdminのログイン情報はプロジェクト直下の.envから読み込みます。
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      TZ: ${APP_TIMEZONE:-Asia/Tokyo}
+    ports:
+      # ブラウザでは http://localhost:5050 へアクセスします。
+      - "${PGADMIN_FORWARD_PORT:-5050}:80"
+    volumes:
+      # pgAdminの設定内容を、コンテナを作り直した後も保持します。
+      - pgadmin_data:/var/lib/pgadmin
+      # 初回起動時に、このプロジェクトのPostgreSQL接続先を登録します。
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    restart: unless-stopped
+
+# 名前付きVolumeとしてPostgreSQLのデータを永続化します。
+volumes:
+  postgres_data:
+  pgadmin_data:
