@@ -69,11 +69,11 @@ final class AdminDraftShiftReadService
         return $store->staffMembers()
             ->select(['users.id', 'users.name', 'users.status'])
             ->where('users.status', 'active')
-            ->whereDoesntHave(
+            ->whereHas(
                 'roles',
-                fn (Builder $builder): Builder => $builder->whereIn(
+                fn (Builder $builder): Builder => $builder->where(
                     'roles.code',
-                    ['shift_manager', 'system_admin'],
+                    'staff',
                 ),
             )
             ->wherePivot('is_active', true)

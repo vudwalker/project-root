@@ -272,6 +272,47 @@ class AdminShiftMutationTest extends TestCase
             ->assertJsonValidationErrors('user_id');
     }
 
+    public function test_explicit_staff_role_allows_manager_and_admin_accounts_to_work(): void
+    {
+        $managerShift = $this->actingAs($this->manager)
+            ->postJson($this->storeUrl(), $this->validPayload([
+                'user_id' => $this->manager->getKey(),
+                'work_date' => '2026-08-12',
+            ]))
+            ->assertCreated()
+            ->assertJson([
+                'user_id' => $this->manager->getKey(),
+                'shift_date' => '2026-08-12',
+                'sequence' => 1,
+            ])
+            ->json();
+
+        $this->actingAs($this->manager)
+            ->patchJson($this->shiftUrl((int) $managerShift['shift_id']), [
+                'target_month' => '2026-08',
+                'shift_pattern_id' => $this->patternD->getKey(),
+            ])
+            ->assertOk()
+            ->assertJson([
+                'user_id' => $this->manager->getKey(),
+                'shift_pattern_id' => $this->patternD->getKey(),
+                'pattern_code' => 'D',
+            ]);
+
+        $this->actingAs($this->manager)
+            ->postJson($this->storeUrl(), $this->validPayload([
+                'user_id' => $this->admin->getKey(),
+                'work_date' => '2026-08-13',
+                'entry_uuid' => (string) Str::uuid(),
+            ]))
+            ->assertCreated()
+            ->assertJson([
+                'user_id' => $this->admin->getKey(),
+                'shift_date' => '2026-08-13',
+                'sequence' => 1,
+            ]);
+    }
+
     public function test_add_validates_pattern_month_uuid_and_server_managed_fields(): void
     {
         $otherPattern = $this->pattern($this->otherStore, 'C');

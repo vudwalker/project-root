@@ -261,13 +261,6 @@ final class AdminShiftWriteService
                     'staff',
                 ),
             )
-            ->whereDoesntHave(
-                'roles',
-                fn (Builder $builder): Builder => $builder->whereIn(
-                    'roles.code',
-                    ['shift_manager', 'system_admin'],
-                ),
-            )
             ->whereHas('stores', function (Builder $builder) use ($store, $date): void {
                 $builder
                     ->where('stores.id', $store->getKey())

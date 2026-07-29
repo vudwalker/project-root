@@ -98,18 +98,28 @@ class AdminDraftShiftReadTest extends TestCase
         ]);
     }
 
-    public function test_admin_role_accounts_are_not_displayed_as_shift_staff(): void
+    public function test_staff_role_controls_display_even_when_admin_roles_are_also_present(): void
     {
         $manager = $this->staff('manager@example.com');
         $systemAdmin = $this->staff('admin@example.com');
+        $managerOnly = $this->staff('manager-only@example.com');
+        $managerOnly->stores()->syncWithoutDetaching([
+            $this->store('daianji')->getKey() => [
+                'display_order' => 99,
+                'is_active' => true,
+                'started_on' => null,
+                'ended_on' => null,
+            ],
+        ]);
 
         $response = $this->actingAs($systemAdmin)
             ->get('/admin/shifts/stores/daianji?month=2026-07')
             ->assertOk();
 
         $response
-            ->assertDontSee('data-user-id="'.$manager->getKey().'"', false)
-            ->assertDontSee('data-user-id="'.$systemAdmin->getKey().'"', false)
+            ->assertSee('data-user-id="'.$manager->getKey().'"', false)
+            ->assertSee('data-user-id="'.$systemAdmin->getKey().'"', false)
+            ->assertDontSee('data-user-id="'.$managerOnly->getKey().'"', false)
             ->assertSee(
                 'data-user-id="'.$this->staff('otsuki@example.com')->getKey().'"',
                 false,
@@ -117,9 +127,12 @@ class AdminDraftShiftReadTest extends TestCase
 
         $this->get(
             "/admin/shifts/staff/{$manager->getKey()}?month=2026-07&store=daianji",
-        )->assertNotFound();
+        )->assertOk();
         $this->get(
             "/admin/shifts/staff/{$systemAdmin->getKey()}?month=2026-07&store=daianji",
+        )->assertOk();
+        $this->get(
+            "/admin/shifts/staff/{$managerOnly->getKey()}?month=2026-07&store=daianji",
         )->assertNotFound();
     }
 
