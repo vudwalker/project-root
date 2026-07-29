@@ -94,6 +94,7 @@
                     <a
                         class="admin-toolbar-menu__link"
                         href="{{ $option['url'] }}"
+                        data-admin-shift-navigation-link
                         @if ($option['current']) aria-current="page" @endif
                     >
                         {{ $option['label'] }}
@@ -106,6 +107,7 @@
     <nav class="admin-view-switch" aria-label="管理者用シフト画面切り替え">
         <a
             href="{{ $navigation['storeView'] }}"
+            data-admin-shift-navigation-link
             @class(['admin-view-switch__link', 'is-current' => $screenType === 'store'])
             @if ($screenType === 'store') aria-current="page" @endif
         >
@@ -113,6 +115,7 @@
         </a>
         <a
             href="{{ $navigation['staffView'] }}"
+            data-admin-shift-navigation-link
             @class(['admin-view-switch__link', 'is-current' => $screenType === 'staff'])
             @if ($screenType === 'staff') aria-current="page" @endif
         >

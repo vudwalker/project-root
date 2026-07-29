@@ -94,6 +94,12 @@
                             data-user-id="{{ $cell['userId'] }}"
                             data-store-id="{{ $cell['storeId'] }}"
                             data-shift-date="{{ $day['date'] }}"
+                            @if ($screenType === 'store' && ! $screen['isReadOnly'])
+                                data-shift-editor-cell
+                                tabindex="0"
+                                role="button"
+                                aria-label="{{ $row['name'] }} {{ $day['date'] }}のシフトを編集"
+                            @endif
                         >
                             @foreach ($cell['shifts'] as $shift)
                                 <span
@@ -104,6 +110,12 @@
                                     data-shift-id="{{ $shift['id'] }}"
                                     data-entry-uuid="{{ $shift['entryUuid'] }}"
                                     data-sequence="{{ $shift['sequence'] }}"
+                                    data-shift-pattern-id="{{ $shift['shiftPatternId'] }}"
+                                    data-work-minutes="{{ $shift['workMinutes'] }}"
+                                    @if ($screenType === 'store' && ! $screen['isReadOnly'])
+                                        tabindex="0"
+                                        role="button"
+                                    @endif
                                 >{{ $shift['code'] }}</span>
                             @endforeach
                         </td>
@@ -114,6 +126,7 @@
                             'admin-monthly-start',
                             'admin-monthly-bottom' => $loop->last,
                         ])
+                        data-row-summary="time"
                     >
                         {{ $row['isSpacer'] ? '' : $row['monthlyTotal']['time'] }}
                     </td>
@@ -124,6 +137,7 @@
                                 'admin-monthly-end' => $loop->last,
                                 'admin-monthly-bottom' => $loop->parent->last,
                             ])
+                            data-row-summary-code="{{ $code }}"
                         >
                             {{ $row['monthlyTotal']['counts'][$code] ?: '' }}
                         </td>
@@ -183,15 +197,18 @@
                         @endif
                     </td>
                 @endforeach
-                <td class="admin-shift-grid__monthly-footer admin-shift-grid__monthly-footer--time admin-summary-start">
+                <td
+                    class="admin-shift-grid__monthly-footer admin-shift-grid__monthly-footer--time admin-summary-start"
+                    data-grid-summary="time"
+                >
                     {{ $screen['monthlyTotal']['time'] }}
                 </td>
                 @foreach (['A', 'B', 'C', 'D', 'E'] as $code)
-                    <td class="admin-shift-grid__monthly-footer">
+                    <td class="admin-shift-grid__monthly-footer" data-grid-summary-code="{{ $code }}">
                         {{ $screen['monthlyTotal']['counts'][$code] }}
                     </td>
                 @endforeach
-                <td class="admin-shift-grid__grand-total-footer">
+                <td class="admin-shift-grid__grand-total-footer" data-grid-summary="total">
                     {{ $screen['monthlyTotal']['total'] }}
                 </td>
             </tr>

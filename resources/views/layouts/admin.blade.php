@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', '管理者用シフト')</title>
     <link
         rel="stylesheet"
@@ -24,5 +25,6 @@
     </main>
 
     <script src="{{ asset('js/admin-shift-static.js') }}" defer></script>
+    @stack('scripts')
 </body>
 </html>

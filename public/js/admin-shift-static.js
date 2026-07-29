@@ -59,7 +59,9 @@
 
         const currentMonth = navigation.dataset.targetMonth;
         const form = navigation.querySelector('[data-admin-month-form]');
-        const links = Array.from(navigation.querySelectorAll('[data-admin-month-link]'));
+        const links = Array.from(document.querySelectorAll(
+            '[data-admin-month-link], [data-admin-shift-navigation-link]',
+        ));
         const error = navigation.querySelector('[data-admin-month-navigation-error]');
         const formControls = form
             ? Array.from(form.querySelectorAll('select, button'))
@@ -131,6 +133,10 @@
             }
 
             event.preventDefault();
+
+            if (pendingDestination) {
+                return;
+            }
 
             if (saveState === 'failed') {
                 showError('保存に失敗しているため、対象月を変更できません。');

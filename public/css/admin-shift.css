@@ -10,6 +10,7 @@
     --admin-warning-bg: #ff969b;
     --admin-warning-border: #d71920;
     --admin-warning-text: #bd161b;
+    --admin-save-failure-bg: #fff4f4;
     --admin-name-width: 108px;
     --admin-date-width: 29px;
     --admin-time-width: 70px;
@@ -455,6 +456,15 @@ body.admin-shift-page {
     height: var(--admin-grid-row-height);
 }
 
+[data-shift-editor-cell] {
+    cursor: pointer;
+}
+
+[data-shift-editor-cell]:focus-visible {
+    outline: 2px solid var(--admin-check-color);
+    outline-offset: -2px;
+}
+
 .admin-shift-grid__shift-cell.is-warning {
     background: var(--admin-warning-bg);
 }
@@ -462,6 +472,20 @@ body.admin-shift-page {
 .admin-shift-grid__shift-code {
     display: inline;
     font-size: 14px;
+}
+
+[data-shift-editor] .admin-shift-grid__shift-code {
+    cursor: pointer;
+}
+
+.admin-shift-grid__shift-code.is-save-pending,
+.admin-shift-grid__shift-code.is-saving {
+    opacity: 0.62;
+}
+
+.admin-shift-grid__shift-code.is-save-failed {
+    outline: 1px solid var(--admin-warning-border);
+    background: var(--admin-save-failure-bg);
 }
 
 .admin-shift-grid__shift-code + .admin-shift-grid__shift-code::before {
@@ -637,6 +661,20 @@ body.admin-shift-page {
     background: #ffffff;
     font-size: 12px;
     text-align: center;
+}
+
+.admin-save-status[data-save-state="pending"],
+.admin-save-status[data-save-state="saving"] {
+    color: #555555;
+}
+
+.admin-save-status[data-save-state="saved"] {
+    color: var(--admin-check-color);
+}
+
+.admin-save-status[data-save-state="failed"] {
+    border-color: var(--admin-warning-border);
+    color: var(--admin-warning-text);
 }
 
 .admin-publish-button {

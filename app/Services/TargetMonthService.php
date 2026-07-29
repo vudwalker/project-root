@@ -59,8 +59,6 @@ final class TargetMonthService
             : $this->fromMonthValue(
                 $request->query('month'),
                 $fallbackMonth,
-                $minimumMonth,
-                $maximumMonth,
             );
         $selectableMonthsByYear = $this->selectableMonthsByYear(
             $minimumMonth,
@@ -139,6 +137,44 @@ final class TargetMonthService
         ]);
     }
 
+    /**
+     * APIから受け取った対象月を、画面と同じ選択可能期間で厳密に検証します。
+     */
+    public function parseSelectableMonth(string $value): ?CarbonImmutable
+    {
+        if (! preg_match('/^(\d{4})-(\d{2})$/', $value, $matches)) {
+            return null;
+        }
+
+        $monthNumber = (int) $matches[2];
+
+        if ($monthNumber < 1 || $monthNumber > 12) {
+            return null;
+        }
+
+        $minimumMonth = $this->systemStartMonth();
+        $maximumMonth = $this->currentMonth()
+            ->addMonthsNoOverflow(self::SELECTABLE_FUTURE_MONTHS);
+
+        if ($maximumMonth->lessThan($minimumMonth)) {
+            $maximumMonth = $minimumMonth;
+        }
+
+        $targetMonth = CarbonImmutable::create(
+            (int) $matches[1],
+            $monthNumber,
+            1,
+            0,
+            0,
+            0,
+            (string) config('app.timezone', 'Asia/Tokyo'),
+        )->startOfMonth();
+
+        return $targetMonth->betweenIncluded($minimumMonth, $maximumMonth)
+            ? $targetMonth
+            : null;
+    }
+
     private function currentMonth(): CarbonImmutable
     {
         return CarbonImmutable::now((string) config('app.timezone', 'Asia/Tokyo'))
@@ -183,22 +219,14 @@ final class TargetMonthService
     private function fromMonthValue(
         mixed $value,
         CarbonImmutable $fallback,
-        CarbonImmutable $minimumMonth,
-        CarbonImmutable $maximumMonth,
     ): CarbonImmutable {
-        if (! is_string($value) || ! preg_match('/^(\d{4})-(\d{2})$/', $value, $matches)) {
+        if (! is_string($value)) {
             return $fallback;
         }
 
-        $targetMonth = $this->makeMonth(
-            (int) $matches[1],
-            (int) $matches[2],
-            $fallback,
-            $minimumMonth,
-            $maximumMonth,
-        );
+        $targetMonth = $this->parseSelectableMonth($value);
 
-        return $targetMonth->format('Y-m') === $value ? $targetMonth : $fallback;
+        return $targetMonth?->format('Y-m') === $value ? $targetMonth : $fallback;
     }
 
     private function makeMonth(

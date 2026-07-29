@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminShiftController;
+use App\Http\Controllers\Admin\AdminShiftMutationController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\StaffShiftController;
 use App\Http\Middleware\EnsureAdminAccess;
@@ -32,13 +33,25 @@ Route::middleware([
 });
 
 /*
- * 管理者用UIは認証・認可後に、DBの下書きを読み取り専用で表示します。
- * 保存API、自動保存、配布処理にはまだ接続しません。
+ * 管理者用店舗別シフト編集画面だけを書き込みAPIへ接続します。
+ * 管理者用スタッフ別シフト確認画面は閲覧専用のままとし、配布処理には接続しません。
  */
 Route::middleware(['auth', EnsureAdminAccess::class])
-    ->controller(AdminShiftController::class)
     ->group(function (): void {
-        Route::get('/admin', 'store')->name('admin.top');
-        Route::get('/admin/shifts/stores/{store}', 'store')->name('admin.shifts.stores.show');
-        Route::get('/admin/shifts/staff/{staff?}', 'staff')->name('admin.shifts.staff.show');
+        Route::controller(AdminShiftController::class)->group(function (): void {
+            Route::get('/admin', 'store')->name('admin.top');
+            Route::get('/admin/shifts/stores/{store}', 'store')
+                ->name('admin.shifts.stores.show');
+            Route::get('/admin/shifts/staff/{staff?}', 'staff')
+                ->name('admin.shifts.staff.show');
+        });
+
+        Route::controller(AdminShiftMutationController::class)->group(function (): void {
+            Route::post('/admin/shifts/stores/{store}/shifts', 'store')
+                ->name('admin.shifts.store');
+            Route::patch('/admin/shifts/stores/{store}/shifts/{shift}', 'update')
+                ->name('admin.shifts.update');
+            Route::delete('/admin/shifts/stores/{store}/shifts/{shift}', 'destroy')
+                ->name('admin.shifts.destroy');
+        });
     });

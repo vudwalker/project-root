@@ -117,6 +117,7 @@ final class AdminDraftShiftReadService
                             'shift_schedule_id',
                             'user_id',
                             'work_date',
+                            'store_shift_pattern_id',
                             'sequence',
                             'entry_uuid',
                             'pattern_code',
@@ -150,12 +151,18 @@ final class AdminDraftShiftReadService
             ->where('is_active', true)
             ->orderBy('display_order')
             ->orderBy('code')
-            ->pluck('code')
+            ->get(['id', 'code', 'work_minutes'])
+            ->map(fn (StoreShiftPattern $pattern): array => [
+                'id' => (int) $pattern->getKey(),
+                'code' => $pattern->code,
+                'workMinutes' => (int) $pattern->work_minutes,
+            ])
             ->all();
 
         return [
             'contextName' => $store->name,
             'contextStoreId' => (int) $store->getKey(),
+            'contextStoreCode' => $store->code,
             'scheduleId' => $schedule?->getKey(),
             'hasSchedule' => $schedule !== null,
             'hasStaff' => $staffMembers->isNotEmpty(),
@@ -209,6 +216,7 @@ final class AdminDraftShiftReadService
                 'shift_schedule_id',
                 'user_id',
                 'work_date',
+                'store_shift_pattern_id',
                 'sequence',
                 'entry_uuid',
                 'pattern_code',
@@ -419,6 +427,7 @@ final class AdminDraftShiftReadService
                     'shiftDate' => $shift->work_date->toDateString(),
                     'entryUuid' => (string) $shift->entry_uuid,
                     'sequence' => (int) $shift->sequence,
+                    'shiftPatternId' => (int) $shift->store_shift_pattern_id,
                     'code' => $shift->pattern_code,
                     'workMinutes' => (int) $shift->work_minutes,
                 ])

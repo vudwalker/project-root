@@ -493,13 +493,17 @@ class AdminDraftShiftReadTest extends TestCase
             '/<span\s+class="admin-shift-grid__shift-code"\s+'
             .'data-user-id="%d"\s+data-store-id="%d"\s+'
             .'data-shift-date="%s"\s+data-shift-id="%d"\s+'
-            .'data-entry-uuid="%s"\s+data-sequence="%d"\s*>%s<\/span>/s',
+            .'data-entry-uuid="%s"\s+data-sequence="%d"\s+'
+            .'data-shift-pattern-id="%d"\s+data-work-minutes="%d"[^>]*>'
+            .'%s<\/span>/s',
             $shift->user_id,
             $store->getKey(),
             preg_quote($shift->work_date->toDateString(), '/'),
             $shift->getKey(),
             preg_quote((string) $shift->entry_uuid, '/'),
             $shift->sequence,
+            $shift->store_shift_pattern_id,
+            $shift->work_minutes,
             preg_quote($shift->pattern_code, '/'),
         );
 

@@ -40,7 +40,8 @@ class ShiftSchedule extends Model
     {
         return $this->hasMany(Shift::class)
             ->orderBy('work_date')
-            ->orderBy('sequence');
+            ->orderBy('sequence')
+            ->orderBy('id');
     }
 
     public function publishedShifts(): HasMany

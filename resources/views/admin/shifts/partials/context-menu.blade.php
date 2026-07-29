@@ -5,6 +5,7 @@
             <a
                 class="admin-context-menu__link"
                 href="{{ $option['url'] }}"
+                data-admin-shift-navigation-link
                 @if ($option['current']) aria-current="page" @endif
             >
                 {{ $option['label'] }}

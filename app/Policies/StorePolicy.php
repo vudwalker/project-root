@@ -47,4 +47,16 @@ final class StorePolicy
             })
             ->exists();
     }
+
+    /**
+     * 管理者用店舗別シフト編集画面から下書きを変更できるか判定します。
+     */
+    public function editAdminShifts(User $user, Store $store): bool
+    {
+        if (! $store->isActive() || ! $this->viewAdminShifts($user, $store)) {
+            return false;
+        }
+
+        return $user->hasRole('system_admin', 'shift_manager');
+    }
 }
