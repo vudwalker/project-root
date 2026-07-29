@@ -1,4 +1,11 @@
-<div class="admin-shift-grid-scroll" tabindex="0" aria-label="月間シフト表。横方向と縦方向にスクロールできます">
+<div
+    @class([
+        'admin-shift-grid-scroll',
+        'admin-shift-grid-scroll--staff' => $screenType === 'staff',
+    ])
+    tabindex="0"
+    aria-label="月間シフト表。横方向と縦方向にスクロールできます"
+>
     <table @class(['admin-shift-grid', 'admin-shift-grid--staff' => $screenType === 'staff'])>
         <caption class="admin-visually-hidden">
             {{ $calendar['month_label'] }} {{ $screen['contextName'] }}
@@ -70,13 +77,10 @@
             </tr>
         </thead>
         <tbody>
-            @foreach ($screen['rows'] as $row)
+            @forelse ($screen['rows'] as $row)
                 <tr
-                    @if ($screenType === 'store')
-                        data-user-id="{{ $row['id'] }}"
-                    @else
-                        data-store-id="{{ $row['id'] }}"
-                    @endif
+                    data-user-id="{{ $row['userId'] }}"
+                    data-store-id="{{ $row['storeId'] }}"
                 >
                     <th class="admin-shift-grid__row-name" scope="row">{{ $row['name'] }}</th>
                     @foreach ($calendar['days'] as $day)
@@ -87,10 +91,20 @@
                                 'is-warning' => $cell['isWarning'],
                                 'is-today' => $day['is_today'],
                             ])
+                            data-user-id="{{ $cell['userId'] }}"
+                            data-store-id="{{ $cell['storeId'] }}"
                             data-shift-date="{{ $day['date'] }}"
                         >
-                            @foreach ($cell['codes'] as $code)
-                                <span class="admin-shift-grid__shift-code">{{ $code }}</span>
+                            @foreach ($cell['shifts'] as $shift)
+                                <span
+                                    class="admin-shift-grid__shift-code"
+                                    data-user-id="{{ $shift['userId'] }}"
+                                    data-store-id="{{ $shift['storeId'] }}"
+                                    data-shift-date="{{ $shift['shiftDate'] }}"
+                                    data-shift-id="{{ $shift['id'] }}"
+                                    data-entry-uuid="{{ $shift['entryUuid'] }}"
+                                    data-sequence="{{ $shift['sequence'] }}"
+                                >{{ $shift['code'] }}</span>
                             @endforeach
                         </td>
                     @endforeach
@@ -118,7 +132,36 @@
                         <span class="admin-visually-hidden">総数</span>
                     </td>
                 </tr>
-            @endforeach
+            @empty
+                <tr data-empty-state="staff">
+                    <th class="admin-shift-grid__row-name" scope="row">
+                        {{ $screen['emptyMessage'] }}
+                    </th>
+                    @foreach ($calendar['days'] as $day)
+                        <td
+                            @class([
+                                'admin-shift-grid__shift-cell',
+                                'is-today' => $day['is_today'],
+                            ])
+                            data-store-id="{{ $screen['contextStoreId'] }}"
+                            data-shift-date="{{ $day['date'] }}"
+                        ></td>
+                    @endforeach
+                    <td class="admin-shift-grid__monthly-value admin-monthly-start admin-monthly-bottom"></td>
+                    @foreach (['A', 'B', 'C', 'D', 'E'] as $code)
+                        <td
+                            @class([
+                                'admin-shift-grid__monthly-value',
+                                'admin-monthly-end' => $loop->last,
+                                'admin-monthly-bottom',
+                            ])
+                        ></td>
+                    @endforeach
+                    <td class="admin-shift-grid__grand-total-value">
+                        <span class="admin-visually-hidden">総数</span>
+                    </td>
+                </tr>
+            @endforelse
         </tbody>
         <tfoot>
             <tr>

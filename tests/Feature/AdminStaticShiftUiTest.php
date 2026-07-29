@@ -2,11 +2,36 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Database\Seeders\DatabaseSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class AdminStaticShiftUiTest extends TestCase
 {
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        CarbonImmutable::setTestNow(
+            CarbonImmutable::create(2026, 7, 30, 12, 0, 0, 'Asia/Tokyo'),
+        );
+        $this->seed(DatabaseSeeder::class);
+        $this->actingAs(
+            User::query()->where('email', 'admin@example.com')->firstOrFail(),
+        );
+    }
+
+    protected function tearDown(): void
+    {
+        CarbonImmutable::setTestNow();
+
+        parent::tearDown();
+    }
+
     public function test_admin_top_displays_the_store_shift_ui_with_static_controls(): void
     {
         $response = $this->get('/admin?month=2026-07');
@@ -25,7 +50,10 @@ class AdminStaticShiftUiTest extends TestCase
 
     public function test_admin_staff_shift_ui_is_read_only(): void
     {
-        $response = $this->get('/admin/shifts/staff/chikazawa?month=2026-07');
+        $staff = User::query()->where('email', 'staff@example.com')->firstOrFail();
+        $response = $this->get(
+            "/admin/shifts/staff/{$staff->getKey()}?month=2026-07&store=daianji",
+        );
 
         $response
             ->assertOk()
@@ -33,29 +61,44 @@ class AdminStaticShiftUiTest extends TestCase
             ->assertSee('近澤幸次')
             ->assertSee('閲覧専用')
             ->assertDontSee('data-static-shift-mode', false)
+            ->assertSee('admin-shift-grid-scroll--staff', false)
             ->assertSee('data-shift-source="draft"', false);
+
+        $stylesheet = file_get_contents(public_path('css/admin-shift.css'));
+
+        $this->assertStringContainsString(
+            '--admin-staff-grid-min-height: 220px;',
+            $stylesheet,
+        );
+        $this->assertStringContainsString(
+            '.admin-shift-grid-scroll--staff',
+            $stylesheet,
+        );
     }
 
     public function test_ng_state_is_a_state_of_each_admin_shift_screen(): void
     {
+        $staff = User::query()->where('email', 'staff@example.com')->firstOrFail();
         $storeResponse = $this->get('/admin/shifts/stores/daianji?month=2026-07&state=ng');
-        $staffResponse = $this->get('/admin/shifts/staff/chikazawa?month=2026-07&state=ng');
+        $staffResponse = $this->get(
+            "/admin/shifts/staff/{$staff->getKey()}?month=2026-07&store=daianji&state=ng",
+        );
 
         $storeResponse
             ->assertOk()
-            ->assertSee('重複勤務があります')
-            ->assertSee('修正が必要・配布不可');
+            ->assertSee('修正が必要な下書きがあります')
+            ->assertSee('読み取り接続では警告状態を更新しません');
 
         $staffResponse
             ->assertOk()
-            ->assertSee('西大寺と大安寺の勤務が重複しています')
-            ->assertSee('修正が必要・配布不可');
+            ->assertSee('修正が必要な下書きがあります')
+            ->assertSee('管理者用店舗別シフト編集画面で確認してください');
     }
 
     public function test_unknown_static_context_returns_not_found(): void
     {
         $this->get('/admin/shifts/stores/unknown?month=2026-07')->assertNotFound();
-        $this->get('/admin/shifts/staff/unknown?month=2026-07')->assertNotFound();
+        $this->get('/admin/shifts/staff/999999?month=2026-07&store=daianji')->assertNotFound();
     }
 
     public function test_admin_grid_generates_the_actual_dates_for_a_leap_year_february(): void

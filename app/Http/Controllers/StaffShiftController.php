@@ -33,7 +33,7 @@ class StaffShiftController extends Controller
 
         return view('staff.top', [
             'calendar' => $this->calendarService->make($targetMonth['value'], $today),
-            'loginUser' => $this->mockService->loginUser(),
+            'loginUser' => $this->loginUser($request),
             'personalShifts' => $this->mockService->personalShifts(),
             'stores' => $this->mockService->stores(),
             'today' => $today,
@@ -71,7 +71,7 @@ class StaffShiftController extends Controller
 
         return view('staff.store', [
             'calendar' => $this->calendarService->make($targetMonth['value'], $today),
-            'loginUser' => $this->mockService->loginUser(),
+            'loginUser' => $this->loginUser($request),
             'stores' => $stores,
             'store' => $stores[$store],
             'storeCode' => $store,
@@ -118,5 +118,15 @@ class StaffShiftController extends Controller
         $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
 
         return $date !== false && $date->format('Y-m-d') === $value ? $value : null;
+    }
+
+    /**
+     * @return array{name: string}
+     */
+    private function loginUser(Request $request): array
+    {
+        return [
+            'name' => (string) $request->user()?->name,
+        ];
     }
 }

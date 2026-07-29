@@ -9,6 +9,9 @@
         class="admin-shift-workspace"
         aria-labelledby="store-shift-title"
         data-shift-source="draft"
+        data-store-id="{{ $screen['contextStoreId'] }}"
+        data-shift-schedule-id="{{ $screen['scheduleId'] }}"
+        data-store-read-only="{{ $screen['isReadOnly'] ? 'true' : 'false' }}"
     >
         <h1 id="store-shift-title" class="admin-visually-hidden">
             {{ $screen['contextName'] }} {{ $calendar['month_label'] }} 店舗別シフト編集
@@ -24,6 +27,7 @@
                         type="button"
                         data-static-shift-mode="{{ $pattern }}"
                         aria-pressed="false"
+                        @disabled($screen['isReadOnly'])
                     >
                         {{ $pattern }}
                     </button>
@@ -33,6 +37,7 @@
                     type="button"
                     data-static-shift-mode="delete"
                     aria-pressed="false"
+                    @disabled($screen['isReadOnly'])
                 >
                     削除
                 </button>

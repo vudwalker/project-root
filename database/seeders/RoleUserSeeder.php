@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class RoleUserSeeder extends Seeder
 {
@@ -39,84 +40,115 @@ class RoleUserSeeder extends Seeder
                     'name' => 'システム管理者',
                     'email' => 'admin@example.com',
                     'primary_store' => 'daianji',
+                    'status' => 'active',
                     'roles' => ['staff', 'system_admin'],
                 ],
                 'manager' => [
                     'name' => 'シフト管理者',
                     'email' => 'manager@example.com',
                     'primary_store' => 'daianji',
+                    'status' => 'active',
                     'roles' => ['staff', 'shift_manager'],
                 ],
                 'chikazawa' => [
                     'name' => '近澤幸次',
                     'email' => 'staff@example.com',
                     'primary_store' => 'daianji',
+                    'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'otsuki' => [
                     'name' => '大月敦弘',
                     'email' => 'otsuki@example.com',
                     'primary_store' => 'daianji',
+                    'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'fujimoto' => [
                     'name' => '藤本保子',
                     'email' => 'fujimoto@example.com',
                     'primary_store' => 'daianji',
+                    'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'motoyama' => [
                     'name' => '本山宏明',
                     'email' => 'motoyama@example.com',
                     'primary_store' => 'daianji',
+                    'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'oai' => [
                     'name' => '小合達也',
                     'email' => 'oai@example.com',
                     'primary_store' => 'daianji',
+                    'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'miyake' => [
                     'name' => '三宅由幸',
                     'email' => 'miyake@example.com',
                     'primary_store' => 'noda',
+                    'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'morinaga' => [
                     'name' => '森永俊巳',
                     'email' => 'morinaga@example.com',
                     'primary_store' => 'noda',
+                    'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'kawamoto' => [
                     'name' => '河本健二',
                     'email' => 'kawamoto@example.com',
                     'primary_store' => 'noda',
+                    'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'shimizu' => [
                     'name' => '清水輝夫',
                     'email' => 'shimizu@example.com',
                     'primary_store' => 'noda',
+                    'status' => 'active',
                     'roles' => ['staff'],
                 ],
             ];
 
+            if (app()->environment(['local', 'testing'])) {
+                $users['manager_only'] = [
+                    'name' => 'シフト管理者専用',
+                    'email' => 'manager-only@example.com',
+                    'primary_store' => null,
+                    'status' => 'active',
+                    'roles' => ['shift_manager'],
+                ];
+                $users['inactive'] = [
+                    'name' => '利用停止スタッフ',
+                    'email' => 'inactive@example.com',
+                    'primary_store' => 'daianji',
+                    'status' => 'retired',
+                    'roles' => ['staff'],
+                ];
+            }
+
+            $developmentPassword = $this->developmentPassword();
             $models = [];
 
             foreach ($users as $key => $attributes) {
-                $primaryStore = $stores->get($attributes['primary_store']);
+                $primaryStore = $attributes['primary_store'] === null
+                    ? null
+                    : $stores->get($attributes['primary_store']);
 
-                $models[$key] = User::query()->updateOrCreate(
-                    ['email' => $attributes['email']],
-                    [
+                $models[$key] = $this->updateOrCreateUser(
+                    email: $attributes['email'],
+                    attributes: [
                         'organization_id' => $organization->getKey(),
-                        'primary_store_id' => $primaryStore->getKey(),
+                        'primary_store_id' => $primaryStore?->getKey(),
                         'name' => $attributes['name'],
-                        'password' => Hash::make('password'),
-                        'status' => 'active',
+                        'status' => $attributes['status'],
                     ],
+                    developmentPassword: $developmentPassword,
                 );
 
                 $roleIds = collect($attributes['roles'])
@@ -166,6 +198,45 @@ class RoleUserSeeder extends Seeder
                     'ended_on' => null,
                 ],
             ]);
+
         });
+    }
+
+    /**
+     * 開発環境で値が設定された場合だけ、既存ユーザーのパスワードを更新します。
+     */
+    private function developmentPassword(): ?string
+    {
+        if (! app()->environment(['local', 'testing'])) {
+            return null;
+        }
+
+        $password = config('development.login_password');
+
+        return is_string($password) && $password !== '' ? $password : null;
+    }
+
+    /**
+     * @param  array{organization_id: int, primary_store_id: ?int, name: string, status: string}  $attributes
+     */
+    private function updateOrCreateUser(
+        string $email,
+        array $attributes,
+        ?string $developmentPassword,
+    ): User {
+        $user = User::withTrashed()
+            ->where('email', $email)
+            ->first() ?? new User(['email' => $email]);
+
+        $user->fill($attributes);
+
+        if (! $user->exists || $developmentPassword !== null) {
+            $plainPassword = $developmentPassword ?? Str::random(64);
+            $user->password = Hash::make($plainPassword);
+        }
+
+        $user->save();
+
+        return $user;
     }
 }

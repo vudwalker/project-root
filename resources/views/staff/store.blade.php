@@ -10,7 +10,7 @@
             {{-- 店舗コードを渡すことで、月移動後も同じ店舗を表示します。 --}}
             @include('staff.partials.month-navigation', ['storeCode' => $storeCode])
             {{-- ログイン中スタッフの名前です。 --}}
-            <div class="staff-header__user">{{ $loginUser['name'] }}</div>
+            @include('staff.partials.authenticated-user')
             {{-- 表示中の年月を保ったまま個人画面へ戻ります。 --}}
             <a
                 class="staff-header__top-link"

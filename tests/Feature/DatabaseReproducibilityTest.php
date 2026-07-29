@@ -68,7 +68,7 @@ class DatabaseReproducibilityTest extends TestCase
 
         $this->assertSame(1, Organization::query()->count());
         $this->assertSame(4, Store::query()->count());
-        $this->assertSame(11, User::query()->count());
+        $this->assertSame(13, User::query()->count());
         $this->assertSame(69, Shift::query()->count());
         $this->assertSame(31, PublishedShift::query()->count());
 

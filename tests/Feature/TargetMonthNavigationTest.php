@@ -2,22 +2,22 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use App\Services\TargetMonthService;
 use Carbon\CarbonImmutable;
+use Database\Seeders\DatabaseSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Tests\TestCase;
 
 class TargetMonthNavigationTest extends TestCase
 {
+    use RefreshDatabase;
+
     /**
-     * @var list<string>
+     * @var list<array{path: string, query: array<string, string>}>
      */
-    private array $screens = [
-        '/staff',
-        '/staff/store/daianji',
-        '/admin/shifts/stores/daianji',
-        '/admin/shifts/staff/chikazawa',
-    ];
+    private array $screens;
 
     protected function setUp(): void
     {
@@ -26,6 +26,20 @@ class TargetMonthNavigationTest extends TestCase
         CarbonImmutable::setTestNow(
             CarbonImmutable::create(2026, 7, 30, 12, 0, 0, 'Asia/Tokyo'),
         );
+        $this->seed(DatabaseSeeder::class);
+        $this->actingAs(
+            User::query()->where('email', 'admin@example.com')->firstOrFail(),
+        );
+        $staff = User::query()->where('email', 'staff@example.com')->firstOrFail();
+        $this->screens = [
+            ['path' => '/staff', 'query' => []],
+            ['path' => '/staff/store/daianji', 'query' => []],
+            ['path' => '/admin/shifts/stores/daianji', 'query' => []],
+            [
+                'path' => "/admin/shifts/staff/{$staff->getKey()}",
+                'query' => ['store' => 'daianji'],
+            ],
+        ];
     }
 
     protected function tearDown(): void
@@ -38,20 +52,21 @@ class TargetMonthNavigationTest extends TestCase
     public function test_each_screen_redirects_to_a_canonical_current_month_url(): void
     {
         foreach ($this->screens as $screen) {
-            $this->get($screen)->assertRedirect("{$screen}?month=2026-07");
+            $this->get($this->urlWithoutMonth($screen))
+                ->assertRedirect($this->monthUrl($screen, '2026-07'));
         }
     }
 
     public function test_previous_next_and_current_month_urls_are_available_inside_the_window(): void
     {
         foreach ($this->screens as $screen) {
-            $response = $this->get("{$screen}?month=2026-09");
+            $response = $this->get($this->monthUrl($screen, '2026-09'));
 
             $response
                 ->assertOk()
-                ->assertSee("{$screen}?month=2026-08", false)
-                ->assertSee("{$screen}?month=2026-10", false)
-                ->assertSee("{$screen}?month=2026-07", false)
+                ->assertSee($this->monthUrl($screen, '2026-08'))
+                ->assertSee($this->monthUrl($screen, '2026-10'))
+                ->assertSee($this->monthUrl($screen, '2026-07'))
                 ->assertSee('今月');
         }
     }
@@ -59,15 +74,15 @@ class TargetMonthNavigationTest extends TestCase
     public function test_previous_and_next_navigation_stop_at_the_selectable_boundaries(): void
     {
         foreach ($this->screens as $screen) {
-            $this->get("{$screen}?month=2026-07")
+            $this->get($this->monthUrl($screen, '2026-07'))
                 ->assertOk()
                 ->assertSee('data-month-boundary="minimum"', false)
-                ->assertDontSee("{$screen}?month=2026-06", false);
+                ->assertDontSee($this->monthUrl($screen, '2026-06'));
 
-            $this->get("{$screen}?month=2026-10")
+            $this->get($this->monthUrl($screen, '2026-10'))
                 ->assertOk()
                 ->assertSee('data-month-boundary="maximum"', false)
-                ->assertDontSee("{$screen}?month=2026-11", false);
+                ->assertDontSee($this->monthUrl($screen, '2026-11'));
         }
     }
 
@@ -78,25 +93,25 @@ class TargetMonthNavigationTest extends TestCase
         );
 
         foreach ($this->screens as $screen) {
-            $this->get("{$screen}?month=2026-12")
+            $this->get($this->monthUrl($screen, '2026-12'))
                 ->assertOk()
-                ->assertSee("{$screen}?month=2026-11", false)
-                ->assertSee("{$screen}?month=2027-01", false);
+                ->assertSee($this->monthUrl($screen, '2026-11'))
+                ->assertSee($this->monthUrl($screen, '2027-01'));
 
-            $this->get("{$screen}?month=2027-01")
+            $this->get($this->monthUrl($screen, '2027-01'))
                 ->assertOk()
-                ->assertSee("{$screen}?month=2026-12", false)
-                ->assertSee("{$screen}?month=2027-02", false);
+                ->assertSee($this->monthUrl($screen, '2026-12'))
+                ->assertSee($this->monthUrl($screen, '2027-02'));
         }
     }
 
     public function test_direct_year_and_month_selection_redirects_to_the_canonical_url(): void
     {
         foreach ($this->screens as $screen) {
-            $this->get("{$screen}?year=2026&month_number=10")
-                ->assertRedirect("{$screen}?month=2026-10");
+            $this->get($this->selectionUrl($screen, 2026, 10))
+                ->assertRedirect($this->monthUrl($screen, '2026-10'));
 
-            $this->get("{$screen}?month=2026-10")
+            $this->get($this->monthUrl($screen, '2026-10'))
                 ->assertOk()
                 ->assertSee('2026年10月');
         }
@@ -158,7 +173,7 @@ class TargetMonthNavigationTest extends TestCase
 
     public function test_direct_url_keeps_the_same_target_month(): void
     {
-        $this->get('/admin/shifts/staff/chikazawa?month=2026-09')
+        $this->get($this->monthUrl($this->screens[3], '2026-09'))
             ->assertOk()
             ->assertSee('2026年9月')
             ->assertSee('value="2026"', false)
@@ -168,11 +183,11 @@ class TargetMonthNavigationTest extends TestCase
     public function test_months_before_system_start_and_four_months_ahead_are_rejected_on_every_screen(): void
     {
         foreach ($this->screens as $screen) {
-            $this->get("{$screen}?month=2026-06")
-                ->assertRedirect("{$screen}?month=2026-07");
+            $this->get($this->monthUrl($screen, '2026-06'))
+                ->assertRedirect($this->monthUrl($screen, '2026-07'));
 
-            $this->get("{$screen}?month=2026-11")
-                ->assertRedirect("{$screen}?month=2026-07");
+            $this->get($this->monthUrl($screen, '2026-11'))
+                ->assertRedirect($this->monthUrl($screen, '2026-07'));
         }
     }
 
@@ -180,7 +195,7 @@ class TargetMonthNavigationTest extends TestCase
     {
         foreach ($this->screens as $screen) {
             foreach (range(7, 10) as $month) {
-                $this->get(sprintf('%s?month=2026-%02d', $screen, $month))
+                $this->get($this->monthUrl($screen, sprintf('2026-%02d', $month)))
                     ->assertOk();
             }
         }
@@ -318,5 +333,38 @@ class TargetMonthNavigationTest extends TestCase
         $this->assertSame(1, $matched);
 
         return $matches[1];
+    }
+
+    /**
+     * @param  array{path: string, query: array<string, string>}  $screen
+     */
+    private function urlWithoutMonth(array $screen): string
+    {
+        return $screen['query'] === []
+            ? $screen['path']
+            : $screen['path'].'?'.http_build_query($screen['query']);
+    }
+
+    /**
+     * @param  array{path: string, query: array<string, string>}  $screen
+     */
+    private function monthUrl(array $screen, string $month): string
+    {
+        return $screen['path'].'?'.http_build_query([
+            'month' => $month,
+            ...$screen['query'],
+        ]);
+    }
+
+    /**
+     * @param  array{path: string, query: array<string, string>}  $screen
+     */
+    private function selectionUrl(array $screen, int $year, int $month): string
+    {
+        return $screen['path'].'?'.http_build_query([
+            'year' => $year,
+            'month_number' => $month,
+            ...$screen['query'],
+        ]);
     }
 }

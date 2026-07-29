@@ -16,6 +16,7 @@
     --admin-total-width: 29px;
     --admin-grand-total-width: 30px;
     --admin-grid-row-height: 24px;
+    --admin-staff-grid-min-height: 220px;
     --admin-month-control-border: #666666;
     --admin-month-control-height: 23px;
 }
@@ -75,9 +76,19 @@ body.admin-shift-page {
     font-weight: 700;
 }
 
+.admin-utility__logout-form {
+    margin: 0;
+}
+
 .admin-utility__logout {
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
     text-decoration: underline;
     text-underline-offset: 2px;
+    cursor: pointer;
 }
 
 .admin-shift-toolbar {
@@ -293,6 +304,13 @@ body.admin-shift-page {
     overflow: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+}
+
+.admin-shift-grid-scroll--staff {
+    min-height: min(
+        var(--admin-staff-grid-min-height),
+        calc(100vh - 165px)
+    );
 }
 
 .admin-shift-grid {

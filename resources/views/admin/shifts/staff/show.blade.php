@@ -9,6 +9,9 @@
         class="admin-shift-workspace"
         aria-labelledby="staff-shift-title"
         data-shift-source="draft"
+        data-filter-store-id="{{ $screen['contextStoreId'] }}"
+        data-user-id="{{ $screen['contextUserId'] }}"
+        data-read-only="true"
     >
         <h1 id="staff-shift-title" class="admin-visually-hidden">
             {{ $screen['contextName'] }} {{ $calendar['month_label'] }} スタッフ別シフト確認

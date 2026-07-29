@@ -192,10 +192,30 @@ button:focus-visible {
 }
 
 .staff-header__user {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-left: auto;
     font-size: 14px;
     font-weight: 700;
     white-space: nowrap;
+}
+
+.staff-header__logout-form {
+    margin: 0;
+}
+
+.staff-header__logout {
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 400;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
 }
 
 /* 店舗別画面ではスタッフ名を左寄せグループ内に置きます。 */

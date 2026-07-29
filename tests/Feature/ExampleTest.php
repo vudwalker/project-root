@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
@@ -14,6 +13,10 @@ class ExampleTest extends TestCase
     {
         $response = $this->get('/');
 
-        $response->assertRedirectContains('/staff?month=');
+        $response
+            ->assertOk()
+            ->assertSee('ログイン')
+            ->assertSee('name="email"', false)
+            ->assertSee('name="password"', false);
     }
 }

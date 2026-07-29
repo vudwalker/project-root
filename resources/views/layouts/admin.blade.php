@@ -13,7 +13,10 @@
     <aside class="admin-utility" aria-label="管理者情報">
         <span class="admin-utility__context">管理画面</span>
         <span>{{ $loginUserName }}</span>
-        <span class="admin-utility__logout" aria-disabled="true">ログアウト</span>
+        <form method="POST" action="{{ route('logout') }}" class="admin-utility__logout-form">
+            @csrf
+            <button type="submit" class="admin-utility__logout">ログアウト</button>
+        </form>
     </aside>
 
     <main class="admin-shift-page__main">

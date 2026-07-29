@@ -15,7 +15,7 @@
                     {{-- 前月・表示中の年月・翌月を表示する共通部品です。 --}}
                     @include('staff.partials.month-navigation')
                     {{-- Controllerから渡されたログイン中スタッフの名前です。 --}}
-                    <div class="staff-header__user">{{ $loginUser['name'] }}</div>
+                    @include('staff.partials.authenticated-user')
                     {{-- 個人画面と店舗別画面を切り替えるメニューです。 --}}
                     @include('staff.partials.store-menu')
                 </header>
