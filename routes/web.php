@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\StaticAdminShiftController;
 use App\Http\Controllers\StaffShiftController;
 use App\Http\Middleware\PreventStaffPageCaching;
 use Illuminate\Support\Facades\Route;
@@ -15,4 +16,14 @@ Route::middleware(PreventStaffPageCaching::class)->group(function (): void {
     // スタッフ用画面は、認証導入前のためモックユーザーで表示します。
     Route::get('/staff', [StaffShiftController::class, 'top'])->name('staff.top');
     Route::get('/staff/store/{store}', [StaffShiftController::class, 'store'])->name('staff.store');
+});
+
+/*
+ * 管理者用UIの静的確認ルートです。
+ * この段階では認証・認可・保存API・配布処理へ接続せず、ダミーデータだけを表示します。
+ */
+Route::controller(StaticAdminShiftController::class)->group(function (): void {
+    Route::get('/admin', 'store')->name('admin.top');
+    Route::get('/admin/shifts/stores/{store}', 'store')->name('admin.shifts.stores.show');
+    Route::get('/admin/shifts/staff/{staff?}', 'staff')->name('admin.shifts.staff.show');
 });
