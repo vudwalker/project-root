@@ -22,6 +22,8 @@
     /* 当日のシフト欄。通常セルと区別できる範囲で薄い緑にします。 */
     --shift-today-bg: #e3f4dd;
     --shift-cell-bg: #ffffff;
+    --shift-month-control-border: #777777;
+    --shift-month-control-height: 24px;
 
     /*
      * 個人カレンダーの寸法
@@ -111,11 +113,18 @@ button:focus-visible {
 }
 
 .month-navigation {
-    /* 前月矢印・年月・翌月矢印を横一列に並べます。 */
+    /* 月移動と年月直接指定を小さな2段構成にまとめます。 */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.month-navigation__primary {
     display: flex;
     align-items: center;
     gap: 14px;
-    white-space: nowrap;
 }
 
 .month-navigation__arrow {
@@ -128,11 +137,58 @@ button:focus-visible {
     text-decoration: none;
 }
 
+.month-navigation__arrow.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+}
+
 .month-navigation__label {
+    min-width: 104px;
     font-size: 19px;
     font-weight: 700;
     text-align: center;
     white-space: nowrap;
+}
+
+.month-navigation__selector {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.month-navigation__field {
+    display: inline-flex;
+}
+
+.month-navigation__selector select,
+.month-navigation__button {
+    height: var(--shift-month-control-height);
+    border: 1px solid var(--shift-month-control-border);
+    border-radius: 0;
+    background: #ffffff;
+    color: #333333;
+    font-family: inherit;
+    font-size: 12px;
+}
+
+.month-navigation__selector select {
+    padding: 0 3px;
+}
+
+.month-navigation__button {
+    display: inline-flex;
+    padding: 0 7px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    line-height: calc(var(--shift-month-control-height) - 2px);
+    text-decoration: none;
+}
+
+.month-navigation__selector select:focus-visible,
+.month-navigation__button:focus-visible {
+    outline: 2px solid #2266aa;
+    outline-offset: 1px;
 }
 
 .staff-header__user {

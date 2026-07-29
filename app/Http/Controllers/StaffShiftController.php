@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Services\CalendarService;
 use App\Services\StaffShiftMockService;
+use App\Services\TargetMonthService;
 use DateTimeImmutable;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -13,61 +15,86 @@ class StaffShiftController extends Controller
     public function __construct(
         private readonly CalendarService $calendarService,
         private readonly StaffShiftMockService $mockService,
-    ) {
-    }
+        private readonly TargetMonthService $targetMonthService,
+    ) {}
 
-    public function top(Request $request): View
+    public function top(Request $request): View|RedirectResponse
     {
-        [$month, $today] = $this->resolveDates($request);
+        $targetMonth = $this->targetMonthService->resolve($request);
+        $today = $this->resolveToday($request);
+        $query = $this->todayQuery($request);
+        $baseUrl = route('staff.top');
+
+        if ($targetMonth['requires_canonical_redirect'] || ! $request->routeIs('staff.top')) {
+            return redirect()->to(
+                $this->targetMonthService->url($baseUrl, $targetMonth['value'], $query),
+            );
+        }
 
         return view('staff.top', [
-            'calendar' => $this->calendarService->make($month, $today),
+            'calendar' => $this->calendarService->make($targetMonth['value'], $today),
             'loginUser' => $this->mockService->loginUser(),
             'personalShifts' => $this->mockService->personalShifts(),
             'stores' => $this->mockService->stores(),
             'today' => $today,
+            'monthNavigation' => $this->targetMonthService->navigation(
+                $baseUrl,
+                $targetMonth,
+                $query,
+            ),
             /*
              * todayは動作確認用に明示された場合だけリンクへ引き継ぎます。
              * 通常表示で現在日をURLへ固定すると、日付が変わっても前日のままになるためです。
              */
-            'query' => $this->todayQuery($request),
+            'query' => $query,
         ]);
     }
 
-    public function store(Request $request, string $store): View
+    public function store(Request $request, string $store): View|RedirectResponse
     {
-        [$month, $today] = $this->resolveDates($request);
         $stores = $this->mockService->stores();
 
         if (! array_key_exists($store, $stores)) {
             abort(404);
         }
 
+        $targetMonth = $this->targetMonthService->resolve($request);
+        $today = $this->resolveToday($request);
+        $query = $this->todayQuery($request);
+        $baseUrl = route('staff.store', ['store' => $store]);
+
+        if ($targetMonth['requires_canonical_redirect']) {
+            return redirect()->to(
+                $this->targetMonthService->url($baseUrl, $targetMonth['value'], $query),
+            );
+        }
+
         return view('staff.store', [
-            'calendar' => $this->calendarService->make($month, $today),
+            'calendar' => $this->calendarService->make($targetMonth['value'], $today),
             'loginUser' => $this->mockService->loginUser(),
             'stores' => $stores,
             'store' => $stores[$store],
             'storeCode' => $store,
             'today' => $today,
-            'query' => $this->todayQuery($request),
+            'monthNavigation' => $this->targetMonthService->navigation(
+                $baseUrl,
+                $targetMonth,
+                $query,
+            ),
+            'query' => $query,
         ]);
     }
 
     /**
-     * 不正な値は現在年月・現在日へフォールバックします。
-     *
-     * @return array{string, string}
+     * 不正な日付は現在日へフォールバックします。
      */
-    private function resolveDates(Request $request): array
+    private function resolveToday(Request $request): string
     {
         $now = new DateTimeImmutable('today');
-        $month = $this->validMonth((string) $request->query('month', ''))
-            ?? $now->format('Y-m');
         $today = $this->validDate((string) $request->query('today', ''))
             ?? $now->format('Y-m-d');
 
-        return [$month, $today];
+        return $today;
     }
 
     /**
@@ -80,17 +107,6 @@ class StaffShiftController extends Controller
         $today = $this->validDate((string) $request->query('today', ''));
 
         return $today !== null ? ['today' => $today] : [];
-    }
-
-    private function validMonth(string $value): ?string
-    {
-        if (! preg_match('/^\d{4}-\d{2}$/', $value)) {
-            return null;
-        }
-
-        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value.'-01');
-
-        return $date !== false && $date->format('Y-m') === $value ? $value : null;
     }
 
     private function validDate(string $value): ?string

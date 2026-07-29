@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Carbon\CarbonImmutable;
 use Tests\TestCase;
 
 class AdminStaticShiftUiTest extends TestCase
@@ -18,7 +19,8 @@ class AdminStaticShiftUiTest extends TestCase
             ->assertSee('シフト配布')
             ->assertSee('admin-shift.css')
             ->assertDontSee('staff-shift.css')
-            ->assertDontSee('<form', false);
+            ->assertSee('name="year"', false)
+            ->assertSee('name="month_number"', false);
     }
 
     public function test_admin_staff_shift_ui_is_read_only(): void
@@ -31,7 +33,7 @@ class AdminStaticShiftUiTest extends TestCase
             ->assertSee('近澤幸次')
             ->assertSee('閲覧専用')
             ->assertDontSee('data-static-shift-mode', false)
-            ->assertDontSee('<form', false);
+            ->assertSee('data-shift-source="draft"', false);
     }
 
     public function test_ng_state_is_a_state_of_each_admin_shift_screen(): void
@@ -58,12 +60,16 @@ class AdminStaticShiftUiTest extends TestCase
 
     public function test_admin_grid_generates_the_actual_dates_for_a_leap_year_february(): void
     {
-        $response = $this->get('/admin?month=2024-02');
+        CarbonImmutable::setTestNow(
+            CarbonImmutable::create(2027, 11, 15, 12, 0, 0, 'Asia/Tokyo'),
+        );
+        $response = $this->get('/admin?month=2028-02');
+        CarbonImmutable::setTestNow();
 
         $response
             ->assertOk()
-            ->assertSee('2024年2月')
-            ->assertSee('data-shift-date="2024-02-29"', false)
-            ->assertDontSee('data-shift-date="2024-02-30"', false);
+            ->assertSee('2028年2月')
+            ->assertSee('data-shift-date="2028-02-29"', false)
+            ->assertDontSee('data-shift-date="2028-02-30"', false);
     }
 }

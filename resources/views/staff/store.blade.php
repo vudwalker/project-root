@@ -4,7 +4,7 @@
 @section('title', $store['name'].' 月間シフト表')
 
 @section('content')
-    <div class="staff-screen staff-screen--store">
+    <div class="staff-screen staff-screen--store" data-shift-source="published">
         {{-- このヘッダーは表の横スクロール領域には含めません。 --}}
         <header class="staff-header staff-header--store">
             {{-- 店舗コードを渡すことで、月移動後も同じ店舗を表示します。 --}}

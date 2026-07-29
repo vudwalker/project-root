@@ -14,6 +14,8 @@
         setupStoreMenus();
         // 店舗別画面にだけ存在する横スクロールの処理です。
         setupStoreScroll();
+        // 対象年に応じて、選択可能な月だけを月選択へ表示します。
+        setupTargetMonthSelectors();
     });
 
     /**
@@ -186,6 +188,56 @@
             if (!userScrolled) {
                 window.requestAnimationFrame(moveToToday);
             }
+        });
+    }
+
+    /**
+     * サーバーが検証済みの年月範囲だけを、年月選択へ表示します。
+     */
+    function setupTargetMonthSelectors() {
+        var navigations = document.querySelectorAll('[data-staff-month-navigation]');
+
+        navigations.forEach(function (navigation) {
+            var form = navigation.querySelector('[data-staff-month-form]');
+
+            if (!form) {
+                return;
+            }
+
+            var yearSelect = form.querySelector('[data-month-year]');
+            var monthSelect = form.querySelector('[data-month-number]');
+
+            if (!yearSelect || !monthSelect) {
+                return;
+            }
+
+            yearSelect.addEventListener('change', function () {
+                replaceSelectableMonths(yearSelect, monthSelect);
+            });
+        });
+    }
+
+    function replaceSelectableMonths(yearSelect, monthSelect) {
+        var selectedYearOption = yearSelect.options[yearSelect.selectedIndex];
+        var months = selectedYearOption.dataset.months
+            .split(',')
+            .filter(function (month) {
+                return month !== '';
+            });
+        var currentMonth = monthSelect.value;
+        var canKeepCurrentMonth = months.indexOf(currentMonth) !== -1;
+
+        monthSelect.replaceChildren();
+
+        months.forEach(function (month, index) {
+            var option = document.createElement('option');
+
+            option.value = month;
+            option.textContent = month + '月';
+            option.selected = canKeepCurrentMonth
+                ? month === currentMonth
+                : index === 0;
+            monthSelect.appendChild(option);
         });
     }
 }());

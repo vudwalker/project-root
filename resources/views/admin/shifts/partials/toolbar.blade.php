@@ -1,12 +1,89 @@
 <header class="admin-shift-toolbar">
-    <nav class="admin-month-navigation" aria-label="対象月切り替え">
-        <a class="admin-month-navigation__arrow" href="{{ $navigation['previous'] }}" aria-label="前月">
-            ◁
-        </a>
-        <span class="admin-month-navigation__label">{{ $calendar['month_label'] }}</span>
-        <a class="admin-month-navigation__arrow" href="{{ $navigation['next'] }}" aria-label="翌月">
-            ▷
-        </a>
+    <nav
+        class="admin-month-navigation"
+        aria-label="対象月切り替え"
+        data-admin-month-navigation
+        data-target-month="{{ $monthNavigation['selectedMonth'] }}"
+    >
+        <div class="admin-month-navigation__primary">
+            @if ($monthNavigation['previousUrl'])
+                <a
+                    class="admin-month-navigation__arrow"
+                    href="{{ $monthNavigation['previousUrl'] }}"
+                    aria-label="前月"
+                    data-admin-month-link
+                >◁</a>
+            @else
+                <span
+                    class="admin-month-navigation__arrow is-disabled"
+                    aria-label="これより前の月は選択できません"
+                    aria-disabled="true"
+                    data-month-boundary="minimum"
+                >◁</span>
+            @endif
+            <span class="admin-month-navigation__label">{{ $calendar['month_label'] }}</span>
+            @if ($monthNavigation['nextUrl'])
+                <a
+                    class="admin-month-navigation__arrow"
+                    href="{{ $monthNavigation['nextUrl'] }}"
+                    aria-label="翌月"
+                    data-admin-month-link
+                >▷</a>
+            @else
+                <span
+                    class="admin-month-navigation__arrow is-disabled"
+                    aria-label="これより先の月は選択できません"
+                    aria-disabled="true"
+                    data-month-boundary="maximum"
+                >▷</span>
+            @endif
+        </div>
+
+        <form
+            class="admin-month-navigation__selector"
+            method="GET"
+            action="{{ $monthNavigation['formAction'] }}"
+            data-admin-month-form
+        >
+            @foreach ($monthNavigation['hiddenQuery'] as $name => $value)
+                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+            @endforeach
+
+            <label>
+                <span class="admin-visually-hidden">年</span>
+                <select name="year" aria-label="表示する年" data-month-year>
+                    @foreach ($monthNavigation['selectableYears'] as $year)
+                        <option
+                            value="{{ $year }}"
+                            data-months="{{ implode(',', $monthNavigation['selectableMonthsByYear'][$year]) }}"
+                            @selected($year === $monthNavigation['selectedYear'])
+                        >{{ $year }}年</option>
+                    @endforeach
+                </select>
+            </label>
+
+            <label>
+                <span class="admin-visually-hidden">月</span>
+                <select name="month_number" aria-label="表示する月" data-month-number>
+                    @foreach ($monthNavigation['selectableMonthsByYear'][$monthNavigation['selectedYear']] as $monthNumber)
+                        <option
+                            value="{{ $monthNumber }}"
+                            @selected($monthNumber === $monthNavigation['selectedMonthNumber'])
+                        >{{ $monthNumber }}月</option>
+                    @endforeach
+                </select>
+            </label>
+
+            <button type="submit">表示</button>
+            <a href="{{ $monthNavigation['currentUrl'] }}" data-admin-month-link>今月</a>
+        </form>
+
+        <span
+            class="admin-month-navigation__error"
+            role="alert"
+            data-admin-month-navigation-error
+            hidden
+        ></span>
     </nav>
 
     @if ($screenType === 'store')

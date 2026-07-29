@@ -4,7 +4,7 @@
 @section('title', 'スタッフ用シフト')
 
 @section('content')
-    <div class="staff-screen staff-screen--personal">
+    <div class="staff-screen staff-screen--personal" data-shift-source="published">
         {{--
             スマートフォンでは、このwrapperの横幅に収まるように
             中のヘッダーとカレンダーをJavaScriptでまとめて縮小します。

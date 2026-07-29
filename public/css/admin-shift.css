@@ -16,6 +16,8 @@
     --admin-total-width: 29px;
     --admin-grand-total-width: 30px;
     --admin-grid-row-height: 24px;
+    --admin-month-control-border: #666666;
+    --admin-month-control-height: 23px;
 }
 
 .admin-shift-page,
@@ -43,6 +45,7 @@ body.admin-shift-page {
 
 .admin-shift-page a:focus-visible,
 .admin-shift-page button:focus-visible,
+.admin-shift-page select:focus-visible,
 .admin-shift-page summary:focus-visible,
 .admin-shift-grid-scroll:focus-visible {
     outline: 2px solid #2266aa;
@@ -83,7 +86,7 @@ body.admin-shift-page {
     z-index: 10;
     align-items: center;
     width: 100%;
-    height: 47px;
+    height: 70px;
     padding-left: 12px;
     white-space: nowrap;
 }
@@ -91,6 +94,14 @@ body.admin-shift-page {
 .admin-month-navigation {
     display: flex;
     flex: 0 0 272px;
+    position: relative;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.admin-month-navigation__primary {
+    display: flex;
     align-items: center;
     gap: 17px;
 }
@@ -113,6 +124,64 @@ body.admin-shift-page {
     font-weight: 700;
     letter-spacing: 0.01em;
     text-align: center;
+}
+
+.admin-month-navigation__selector {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.admin-month-navigation__selector label {
+    display: inline-flex;
+}
+
+.admin-month-navigation__selector select,
+.admin-month-navigation__selector button,
+.admin-month-navigation__selector a {
+    height: var(--admin-month-control-height);
+    border: 1px solid var(--admin-month-control-border);
+    border-radius: 0;
+    background: #ffffff;
+    color: #333333;
+    font: inherit;
+    font-size: 11px;
+}
+
+.admin-month-navigation__selector select {
+    padding: 0 2px;
+}
+
+.admin-month-navigation__selector button,
+.admin-month-navigation__selector a {
+    display: inline-flex;
+    padding: 0 6px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    line-height: calc(var(--admin-month-control-height) - 2px);
+    text-decoration: none;
+}
+
+.admin-month-navigation__selector :disabled,
+.admin-month-navigation__selector [aria-disabled="true"],
+.admin-month-navigation__arrow[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.admin-month-navigation__error {
+    position: absolute;
+    z-index: 25;
+    top: calc(100% + 2px);
+    left: 0;
+    min-width: 250px;
+    padding: 3px 6px;
+    border: 1px solid var(--admin-warning-border);
+    background: #ffffff;
+    color: var(--admin-warning-text);
+    font-size: 11px;
+    white-space: normal;
 }
 
 .admin-toolbar-menu,
@@ -220,7 +289,7 @@ body.admin-shift-page {
 
 .admin-shift-grid-scroll {
     width: 100%;
-    max-height: calc(100vh - 142px);
+    max-height: calc(100vh - 165px);
     overflow: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;

@@ -16,7 +16,7 @@ final class StaticAdminShiftUiService
         'daianji' => '大安寺',
         'noda' => '野田',
         'saidaiji' => '西大寺',
-        'okayama-tomita' => '岡山富田',
+        'okayama-tomida' => '岡山富田',
     ];
 
     /**

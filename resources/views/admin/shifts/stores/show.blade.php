@@ -5,7 +5,11 @@
 @section('content')
     @include('admin.shifts.partials.toolbar', ['screenType' => 'store'])
 
-    <section class="admin-shift-workspace" aria-labelledby="store-shift-title">
+    <section
+        class="admin-shift-workspace"
+        aria-labelledby="store-shift-title"
+        data-shift-source="draft"
+    >
         <h1 id="store-shift-title" class="admin-visually-hidden">
             {{ $screen['contextName'] }} {{ $calendar['month_label'] }} 店舗別シフト編集
         </h1>
