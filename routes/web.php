@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdminShiftController;
 use App\Http\Controllers\Admin\AdminShiftMutationController;
 use App\Http\Controllers\Admin\AdminShiftPublicationController;
+use App\Http\Controllers\Admin\AdminStoreController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\StaffShiftController;
 use App\Http\Middleware\EnsureAdminAccess;
@@ -39,6 +40,14 @@ Route::middleware([
  */
 Route::middleware(['auth', EnsureAdminAccess::class])
     ->group(function (): void {
+        Route::controller(AdminStoreController::class)->group(function (): void {
+            Route::get('/admin/stores', 'index')->name('admin.stores.index');
+            Route::get('/admin/stores/{store}/edit', 'edit')
+                ->name('admin.stores.edit');
+            Route::patch('/admin/stores/{store}', 'update')
+                ->name('admin.stores.update');
+        });
+
         Route::controller(AdminShiftController::class)->group(function (): void {
             Route::get('/admin', 'store')->name('admin.top');
             Route::get('/admin/shifts/stores/{store}', 'store')

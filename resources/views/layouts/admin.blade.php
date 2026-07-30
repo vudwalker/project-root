@@ -14,6 +14,9 @@
     <aside class="admin-utility" aria-label="管理者情報">
         <span class="admin-utility__context">管理画面</span>
         <span>{{ $loginUserName }}</span>
+        <a class="admin-utility__link" href="{{ route('admin.stores.index') }}">
+            店舗管理
+        </a>
         <form method="POST" action="{{ route('logout') }}" class="admin-utility__logout-form">
             @csrf
             <button type="submit" class="admin-utility__logout">ログアウト</button>
