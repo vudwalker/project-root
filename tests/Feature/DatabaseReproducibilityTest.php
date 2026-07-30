@@ -49,6 +49,7 @@ class DatabaseReproducibilityTest extends TestCase
             'status',
             'deleted_at',
         ]));
+        $this->assertTrue(Schema::hasColumn('stores', 'area'));
         $this->assertTrue(Schema::hasColumns('shift_schedules', [
             'draft_version',
             'published_version',
@@ -78,6 +79,21 @@ class DatabaseReproducibilityTest extends TestCase
             'effective_to',
             'is_active',
         ]));
+
+        $managerIndexes = collect(Schema::getIndexes('store_shift_manager'));
+        $this->assertFalse(
+            $managerIndexes->contains(
+                fn (array $index): bool => $index['name']
+                    === 'store_shift_manager_one_active_per_store',
+            ),
+        );
+        $this->assertTrue(
+            $managerIndexes->contains(
+                fn (array $index): bool => $index['name']
+                    === 'store_shift_manager_store_id_user_id_unique'
+                    && $index['unique'],
+            ),
+        );
     }
 
     public function test_seeders_are_idempotent_and_keep_conflicting_drafts_unpublished(): void

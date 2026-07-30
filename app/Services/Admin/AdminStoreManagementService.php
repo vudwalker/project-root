@@ -3,81 +3,115 @@
 namespace App\Services\Admin;
 
 use App\Models\Store;
+use App\Models\StoreStaffingRequirement;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 final class AdminStoreManagementService
 {
     /**
+     * @param  array{manager_id?: int|null, area?: string|null, query?: string|null}  $filters
      * @return Collection<int, Store>
      */
-    public function accessibleStores(User $actor, string $statusFilter): Collection
+    public function accessibleStores(User $actor, array $filters): Collection
     {
         $today = $this->today();
-        $query = Store::query()
-            ->where('organization_id', $actor->organization_id)
+
+        return $this->accessibleStoreQuery($actor)
             ->with([
                 'shiftManagers' => function (BelongsToMany $builder) use ($today): void {
-                    $builder
+                    $this->applyCurrentAssignmentScope($builder, $today)
                         ->select(['users.id', 'users.name'])
-                        ->where('store_shift_manager.is_active', true)
-                        ->where(function (Builder $period) use ($today): void {
-                            $period
-                                ->whereNull('store_shift_manager.started_on')
-                                ->orWhereDate('store_shift_manager.started_on', '<=', $today);
-                        })
-                        ->where(function (Builder $period) use ($today): void {
-                            $period
-                                ->whereNull('store_shift_manager.ended_on')
-                                ->orWhereDate('store_shift_manager.ended_on', '>=', $today);
-                        })
                         ->orderBy('users.name')
                         ->orderBy('users.id');
                 },
             ])
-            ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
-            ->orderBy('display_order')
-            ->orderBy('name')
-            ->orderBy('id');
-
-        if ($actor->hasRole('system_admin')) {
-            return $query
-                ->when(
-                    $statusFilter !== 'all',
-                    fn (Builder $builder): Builder => $builder->where(
-                        'status',
-                        $statusFilter,
-                    ),
-                )
-                ->get();
-        }
-
-        return $query
-            ->where('status', 'active')
-            ->whereHas(
-                'shiftManagers',
-                function (Builder $builder) use ($actor, $today): void {
-                    $builder
-                        ->whereKey($actor->getKey())
-                        ->where('store_shift_manager.is_active', true)
-                        ->where(function (Builder $period) use ($today): void {
-                            $period
-                                ->whereNull('store_shift_manager.started_on')
-                                ->orWhereDate('store_shift_manager.started_on', '<=', $today);
-                        })
-                        ->where(function (Builder $period) use ($today): void {
-                            $period
-                                ->whereNull('store_shift_manager.ended_on')
-                                ->orWhereDate('store_shift_manager.ended_on', '>=', $today);
-                        });
+            ->when(
+                $filters['manager_id'] ?? null,
+                function (Builder $query, int $managerId) use ($today): void {
+                    $query->whereHas(
+                        'shiftManagers',
+                        function (Builder $managerQuery) use ($managerId, $today): void {
+                            $this->applyCurrentAssignmentScope(
+                                $managerQuery,
+                                $today,
+                            )->whereKey($managerId);
+                        },
+                    );
                 },
             )
+            ->when(
+                array_key_exists('area', $filters)
+                    && $filters['area'] !== null
+                    && $filters['area'] !== '',
+                function (Builder $query) use ($filters): void {
+                    if ($filters['area'] === '__unset__') {
+                        $query->whereNull('area');
+
+                        return;
+                    }
+
+                    $query->where('area', $filters['area']);
+                },
+            )
+            ->when(
+                $filters['query'] ?? null,
+                function (Builder $query, string $search): void {
+                    $query->where(function (Builder $searchQuery) use ($search): void {
+                        $searchQuery
+                            ->where('name', 'like', "%{$search}%")
+                            ->orWhere('code', 'like', "%{$search}%");
+                    });
+                },
+            )
+            ->orderBy('code')
             ->get();
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    public function managerFilterOptions(User $actor): Collection
+    {
+        $today = $this->today();
+        $storeIds = $this->accessibleStoreQuery($actor)->pluck('stores.id');
+
+        return User::query()
+            ->where('organization_id', $actor->organization_id)
+            ->where('status', 'active')
+            ->whereHas('roles', fn (Builder $query): Builder => $query->where(
+                'code',
+                'shift_manager',
+            ))
+            ->whereHas(
+                'managedStores',
+                function (Builder $query) use ($storeIds, $today): void {
+                    $this->applyCurrentAssignmentScope($query, $today)
+                        ->whereKey($storeIds);
+                },
+            )
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get(['users.id', 'users.name']);
+    }
+
+    /**
+     * @return SupportCollection<int, string|null>
+     */
+    public function areaFilterOptions(User $actor): SupportCollection
+    {
+        return $this->accessibleStoreQuery($actor)
+            ->select('area')
+            ->groupBy('area')
+            ->orderByRaw('CASE WHEN area IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('area')
+            ->pluck('area');
     }
 
     public function resolveEditableStore(User $actor, string $storeCode): Store
@@ -104,9 +138,146 @@ final class AdminStoreManagementService
     }
 
     /**
-     * @param  array<string, mixed>  $attributes
+     * @return array{
+     *     activeManagerIds: SupportCollection<int, int>,
+     *     managerCandidates: Collection<int, User>,
+     *     staffingRequirement: StoreStaffingRequirement|null,
+     *     store: Store
+     * }
      */
-    public function update(Store $store, array $attributes): Store
+    public function detailData(Store $store): array
+    {
+        $today = $this->today();
+
+        $store->load([
+            'staffMembers' => function (BelongsToMany $query) use ($today): void {
+                $this->applyCurrentStaffMembershipScope($query, $today)
+                    ->select([
+                        'users.id',
+                        'users.name',
+                        'users.email',
+                        'users.primary_store_id',
+                        'users.status',
+                    ])
+                    ->orderBy('store_user.display_order')
+                    ->orderBy('users.name')
+                    ->orderBy('users.id');
+            },
+            'shiftManagers' => fn (BelongsToMany $query) => $query
+                ->orderBy('users.name')
+                ->orderBy('users.id'),
+            'shiftPatterns' => fn ($query) => $query
+                ->orderBy('display_order')
+                ->orderBy('code')
+                ->orderBy('id'),
+        ]);
+
+        $managerCandidates = User::query()
+            ->where('organization_id', $store->organization_id)
+            ->where('status', 'active')
+            ->whereHas('roles', fn (Builder $query): Builder => $query->where(
+                'code',
+                'shift_manager',
+            ))
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get(['users.id', 'users.name', 'users.email']);
+
+        $staffingRequirement = $store->staffingRequirements()
+            ->whereNull('work_date')
+            ->whereNull('weekday')
+            ->where('is_active', true)
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('effective_from')
+                    ->orWhereDate('effective_from', '<=', $this->today());
+            })
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('effective_to')
+                    ->orWhereDate('effective_to', '>=', $this->today());
+            })
+            ->with([
+                'options.patterns.shiftPattern',
+            ])
+            ->orderByDesc('effective_from')
+            ->orderBy('id')
+            ->first();
+
+        $activeManagerIds = $store->shiftManagers
+            ->filter(fn (User $user): bool => $this->isCurrentPivot($user, $today))
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->values();
+
+        return compact(
+            'activeManagerIds',
+            'managerCandidates',
+            'staffingRequirement',
+            'store',
+        );
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    public function searchUnassignedStaff(
+        Store $store,
+        string $search,
+    ): Collection {
+        $today = $this->today();
+
+        return User::query()
+            ->where('organization_id', $store->organization_id)
+            ->where('status', 'active')
+            ->whereHas('roles', fn (Builder $query): Builder => $query->where(
+                'code',
+                'staff',
+            ))
+            ->where(function (Builder $query) use ($search): void {
+                $query
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            })
+            ->whereDoesntHave(
+                'stores',
+                function (Builder $query) use ($store, $today): void {
+                    $query->whereKey($store->getKey());
+                    $this->applyCurrentStaffMembershipScope($query, $today);
+                },
+            )
+            ->orderBy('name')
+            ->orderBy('id')
+            ->limit(20)
+            ->get([
+                'users.id',
+                'users.name',
+                'users.email',
+                'users.primary_store_id',
+            ]);
+    }
+
+    /**
+     * @param  array{name: string, code: string, area: string, status: string}  $attributes
+     */
+    public function create(User $actor, array $attributes): Store
+    {
+        return DB::transaction(fn (): Store => Store::query()->create([
+            'organization_id' => $actor->organization_id,
+            'code' => trim($attributes['code']),
+            'name' => trim($attributes['name']),
+            'area' => trim($attributes['area']),
+            'status' => $attributes['status'],
+            'display_order' => 0,
+            'staffing_check_mode' => 'disabled',
+            'required_staff_count' => null,
+        ]));
+    }
+
+    /**
+     * @param  array{name: string, area: string|null, status?: string}  $attributes
+     */
+    public function updateBasic(Store $store, array $attributes): Store
     {
         return DB::transaction(function () use ($store, $attributes): Store {
             $lockedStore = Store::query()
@@ -114,14 +285,13 @@ final class AdminStoreManagementService
                 ->where('organization_id', $store->organization_id)
                 ->lockForUpdate()
                 ->firstOrFail();
-            $mode = (string) $attributes['staffing_check_mode'];
+
+            $area = $attributes['area'];
 
             $lockedStore->fill([
-                'name' => $attributes['name'],
-                'display_order' => $attributes['display_order'],
-                'staffing_check_mode' => $mode,
-                'required_staff_count' => $mode === 'fixed_total'
-                    ? $attributes['required_staff_count']
+                'name' => trim($attributes['name']),
+                'area' => is_string($area) && trim($area) !== ''
+                    ? trim($area)
                     : null,
                 ...array_key_exists('status', $attributes)
                     ? ['status' => $attributes['status']]
@@ -133,10 +303,75 @@ final class AdminStoreManagementService
         });
     }
 
+    private function accessibleStoreQuery(User $actor): Builder
+    {
+        $query = Store::query()
+            ->where('organization_id', $actor->organization_id);
+
+        if ($actor->hasRole('system_admin')) {
+            return $query;
+        }
+
+        $today = $this->today();
+
+        return $query->whereHas(
+            'shiftManagers',
+            function (Builder $managerQuery) use ($actor, $today): void {
+                $this->applyCurrentAssignmentScope($managerQuery, $today)
+                    ->whereKey($actor->getKey());
+            },
+        );
+    }
+
+    private function applyCurrentAssignmentScope(
+        Builder|BelongsToMany $query,
+        string $today,
+    ): Builder|BelongsToMany {
+        return $query
+            ->where('store_shift_manager.is_active', true)
+            ->where(function (Builder $period) use ($today): void {
+                $period
+                    ->whereNull('store_shift_manager.started_on')
+                    ->orWhereDate('store_shift_manager.started_on', '<=', $today);
+            })
+            ->where(function (Builder $period) use ($today): void {
+                $period
+                    ->whereNull('store_shift_manager.ended_on')
+                    ->orWhereDate('store_shift_manager.ended_on', '>=', $today);
+            });
+    }
+
+    private function applyCurrentStaffMembershipScope(
+        Builder|BelongsToMany $query,
+        string $today,
+    ): Builder|BelongsToMany {
+        return $query
+            ->where('store_user.is_active', true)
+            ->where(function (Builder $period) use ($today): void {
+                $period
+                    ->whereNull('store_user.started_on')
+                    ->orWhereDate('store_user.started_on', '<=', $today);
+            })
+            ->where(function (Builder $period) use ($today): void {
+                $period
+                    ->whereNull('store_user.ended_on')
+                    ->orWhereDate('store_user.ended_on', '>=', $today);
+            });
+    }
+
     private function today(): string
     {
         return CarbonImmutable::now(
             (string) config('app.timezone', 'Asia/Tokyo'),
         )->toDateString();
+    }
+
+    private function isCurrentPivot(User $user, string $today): bool
+    {
+        $pivot = $user->pivot;
+
+        return (bool) $pivot->is_active
+            && ($pivot->started_on === null || $pivot->started_on <= $today)
+            && ($pivot->ended_on === null || $pivot->ended_on >= $today);
     }
 }

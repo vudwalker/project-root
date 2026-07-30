@@ -60,7 +60,7 @@ class AdminDraftShiftReadTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_system_admin_can_open_active_and_inactive_stores_read_only(): void
+    public function test_assigned_admins_can_open_inactive_store_read_only(): void
     {
         $this->actingAs($this->systemAdmin())
             ->get('/admin/shifts/stores/noda?month=2026-07')
@@ -77,7 +77,9 @@ class AdminDraftShiftReadTest extends TestCase
 
         $this->actingAs($this->manager())
             ->get('/admin/shifts/stores/daianji?month=2026-07')
-            ->assertForbidden();
+            ->assertOk()
+            ->assertSee('data-store-read-only="true"', false)
+            ->assertSee('disabled', false);
     }
 
     public function test_store_screen_displays_members_even_when_schedule_and_shifts_do_not_exist(): void

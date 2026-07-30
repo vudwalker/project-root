@@ -4,10 +4,18 @@ namespace App\Http\Requests\Admin;
 
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 final class AdminStoreIndexRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        foreach (['area', 'q'] as $field) {
+            if (is_string($this->input($field))) {
+                $this->merge([$field => trim($this->input($field))]);
+            }
+        }
+    }
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -21,20 +29,25 @@ final class AdminStoreIndexRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => [
-                'sometimes',
-                'string',
-                Rule::in(['all', 'active', 'inactive']),
-            ],
+            'manager_id' => ['nullable', 'integer'],
+            'area' => ['nullable', 'string', 'max:100'],
+            'q' => ['nullable', 'string', 'max:100'],
         ];
     }
 
-    public function statusFilter(User $actor): string
+    /**
+     * @return array{manager_id: int|null, area: string|null, query: string|null}
+     */
+    public function filters(): array
     {
-        if (! $actor->hasRole('system_admin')) {
-            return 'active';
-        }
+        $validated = $this->validated();
 
-        return (string) $this->validated('status', 'all');
+        return [
+            'manager_id' => isset($validated['manager_id'])
+                ? (int) $validated['manager_id']
+                : null,
+            'area' => $validated['area'] ?? null,
+            'query' => $validated['q'] ?? null,
+        ];
     }
 }

@@ -16,6 +16,7 @@ class Store extends Model
         'organization_id',
         'code',
         'name',
+        'area',
         'status',
         'display_order',
         'staffing_check_mode',

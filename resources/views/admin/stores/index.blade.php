@@ -7,37 +7,22 @@
         <header class="admin-store-management__header">
             <div>
                 <h1 id="admin-store-index-title">店舗情報管理</h1>
-                <p>同一組織内で管理可能な店舗だけを表示しています。</p>
+                <p>店舗を検索し、詳細設定を開きます。</p>
             </div>
-            <a class="admin-store-management__back-link" href="{{ route('admin.top') }}">
-                シフト画面へ戻る
-            </a>
-        </header>
-
-        @if ($canFilterInactive)
-            <nav class="admin-store-filter" aria-label="店舗状態の絞り込み">
-                @foreach ([
-                    'all' => 'すべて',
-                    'active' => '有効',
-                    'inactive' => '無効',
-                ] as $value => $label)
+            <div class="admin-store-management__header-actions">
+                @if ($canCreateStore)
                     <a
-                        href="{{ route('admin.stores.index', ['status' => $value]) }}"
-                        @class([
-                            'admin-store-filter__link',
-                            'is-current' => $statusFilter === $value,
-                        ])
-                        @if ($statusFilter === $value) aria-current="page" @endif
+                        class="admin-store-management__primary-link"
+                        href="{{ route('admin.stores.create') }}"
                     >
-                        {{ $label }}
+                        店舗追加
                     </a>
-                @endforeach
-            </nav>
-        @else
-            <p class="admin-store-filter__manager-note">
-                現在有効な担当店舗だけを表示しています。
-            </p>
-        @endif
+                @endif
+                <a class="admin-store-management__back-link" href="{{ route('admin.top') }}">
+                    シフト画面へ戻る
+                </a>
+            </div>
+        </header>
 
         @if (session('status'))
             <p class="admin-store-management__success" role="status">
@@ -45,20 +30,66 @@
             </p>
         @endif
 
+        <form class="admin-store-search" method="GET" action="{{ route('admin.stores.index') }}">
+            <label>
+                <span>担当シフト管理者</span>
+                <select name="manager_id">
+                    <option value="">すべて</option>
+                    @foreach ($managerOptions as $manager)
+                        <option
+                            value="{{ $manager->id }}"
+                            @selected((string) $filters['manager_id'] === (string) $manager->id)
+                        >
+                            {{ $manager->name }}
+                        </option>
+                    @endforeach
+                </select>
+            </label>
+
+            <label>
+                <span>エリア</span>
+                <select name="area">
+                    <option value="">すべて</option>
+                    @foreach ($areaOptions as $area)
+                        <option
+                            value="{{ $area ?? '__unset__' }}"
+                            @selected($filters['area'] === ($area ?? '__unset__'))
+                        >
+                            {{ $area ?? '未設定' }}
+                        </option>
+                    @endforeach
+                </select>
+            </label>
+
+            <label class="admin-store-search__query">
+                <span>店舗名・店舗コード</span>
+                <input
+                    type="search"
+                    name="q"
+                    value="{{ $filters['query'] }}"
+                    maxlength="100"
+                    placeholder="店舗名またはコード"
+                >
+            </label>
+
+            <div class="admin-store-search__actions">
+                <button type="submit">検索</button>
+                <a href="{{ route('admin.stores.index') }}">条件を解除</a>
+            </div>
+        </form>
+
         <div class="admin-store-table-scroll">
             <table class="admin-store-table">
                 <caption class="admin-visually-hidden">
-                    管理可能な店舗の一覧
+                    管理可能な店舗の検索結果
                 </caption>
                 <thead>
                     <tr>
                         <th scope="col">店舗名</th>
                         <th scope="col">店舗コード</th>
-                        <th scope="col">状態</th>
-                        <th scope="col">表示順</th>
-                        <th scope="col">人数チェック方式</th>
-                        <th scope="col">固定必要人数</th>
+                        <th scope="col">エリア</th>
                         <th scope="col">担当シフト管理者</th>
+                        <th scope="col">有効・無効</th>
                         <th scope="col">操作</th>
                     </tr>
                 </thead>
@@ -70,6 +101,10 @@
                         >
                             <th scope="row">{{ $store->name }}</th>
                             <td>{{ $store->code }}</td>
+                            <td>{{ $store->area ?? '未設定' }}</td>
+                            <td>
+                                {{ $store->shiftManagers->pluck('name')->join('、') ?: '未設定' }}
+                            </td>
                             <td>
                                 <span @class([
                                     'admin-store-status',
@@ -79,22 +114,11 @@
                                     {{ $store->status === 'active' ? '有効' : '無効' }}
                                 </span>
                             </td>
-                            <td>{{ $store->display_order }}</td>
-                            <td>{{ $store->staffing_check_mode }}</td>
-                            <td>
-                                {{ $store->required_staff_count === null
-                                    ? '—'
-                                    : $store->required_staff_count }}
-                            </td>
-                            <td>
-                                {{ $store->shiftManagers->pluck('name')->join('、') ?: '未設定' }}
-                            </td>
                             <td>
                                 <a
                                     class="admin-store-table__edit-link"
                                     href="{{ route('admin.stores.edit', [
                                         'store' => $store->code,
-                                        'status' => $statusFilter,
                                     ]) }}"
                                 >
                                     編集
@@ -103,7 +127,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td class="admin-store-table__empty" colspan="8">
+                            <td class="admin-store-table__empty" colspan="6">
                                 条件に一致する店舗はありません。
                             </td>
                         </tr>

@@ -189,6 +189,7 @@ Organization
 | organization_id | bigint | 不可 | 所属組織 |
 | code | varchar(100) | 不可 | 店舗識別コード |
 | name | varchar(255) | 不可 | 店舗名 |
+| area | varchar(100) | 可 | エリア名 |
 | status | varchar(30) | 不可 | 店舗状態 |
 | display_order | integer | 不可 | 店舗一覧の表示順 |
 | staffing_check_mode | varchar(30) | 不可 | 人数チェック方式 |
@@ -221,6 +222,7 @@ Organization
 制約：
 
 - `organization_id + code`を一意にする
+- `organization_id + area`に検索用インデックスを設定する
 - `status`は`active`または`inactive`だけを許可する
 - `display_order`の初期値は`0`
 - `organization_id`は`organizations.id`への外部キー
@@ -228,6 +230,13 @@ Organization
 - `fixed_total`の場合は`required_staff_count`を必須とする
 - `pattern_combinations`の場合は`required_staff_count`を使用しない
 - Soft Deleteを使用する
+
+既存店舗の`area`はNULLを許可し、画面では「未設定」と表示する。
+
+新規店舗の作成時はアプリケーションで`area`を必須とし、
+前後空白を除去して保存する。
+
+店舗コードは作成後に変更しない。
 
 人数チェック：
 
@@ -372,8 +381,12 @@ User
 - 担当店舗のシフトを閲覧・編集できる
 - 担当店舗のシフトを配布できる
 - 担当店舗情報とシフトパターンを追加・編集できる
+- 担当店舗の所属スタッフと人数配置設定を編集できる
 - 主所属店舗が担当店舗であるスタッフ情報を追加・編集できる
 - 担当外店舗は編集できない
+- 担当関係が有効であれば、`inactive`店舗の店舗情報と関連設定を編集できる
+- `inactive`店舗のシフト作成、編集、配布はできない
+- 店舗追加、店舗状態変更、シフト管理者の担当店舗割り当て変更はできない
 - 管理者用・スタッフ別シフト確認画面では、選択した担当店舗へ有効な所属があるスタッフを閲覧できる
 - 重複勤務確認のため、そのスタッフの対象月における全店舗のシフトを閲覧できる
 - 担当外店舗のシフトは閲覧専用とする
@@ -385,7 +398,7 @@ User
 - 全ての`active`店舗のシフトを配布できる
 - `inactive`店舗とその過去データを閲覧できる
 - `inactive`店舗では新規シフト作成、シフト編集、配布ができない
-- 店舗・スタッフ・権限・担当店舗を管理できる
+- 店舗追加と、店舗・スタッフ・権限・担当店舗を管理できる
 - ユーザー権限およびシフト管理者の担当店舗割り当てを変更できる
 
 ---
@@ -485,8 +498,7 @@ store_shift_manager
 
 - `store_id + user_id`を一意にする
 - 一人のシフト管理者は複数店舗を担当可能
-- 有効なシフト管理者は、原則として1店舗につき1人
-- `is_active = true`の`store_id`を一意にする部分インデックスを設定する
+- 1店舗へ複数の有効なシフト管理者を割り当て可能
 - `user_id`には`shift_manager`権限が必要
 - システム管理者は、このテーブルに登録されていなくても全店舗を管理可能
 - シフト操作は店舗状態の制限に従い、`inactive`店舗では過去データの閲覧だけを許可する
@@ -500,7 +512,8 @@ system_admin
 → inactive店舗のシフトは過去データの閲覧だけが可能
 
 shift_manager
-→ store_shift_managerで有効な担当店舗のみ操作可能
+→ store_shift_managerで有効な担当店舗の店舗情報と関連設定を操作可能
+→ inactive店舗ではシフト作成、編集、配布不可
 
 staff
 → 管理画面の編集不可
@@ -1052,6 +1065,7 @@ published_draft_version < draft_version
 
 - `organization_id`
 - `organization_id + code`
+- `organization_id + area`
 - `status`
 - `display_order`
 

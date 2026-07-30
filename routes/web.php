@@ -42,10 +42,28 @@ Route::middleware(['auth', EnsureAdminAccess::class])
     ->group(function (): void {
         Route::controller(AdminStoreController::class)->group(function (): void {
             Route::get('/admin/stores', 'index')->name('admin.stores.index');
+            Route::get('/admin/stores/create', 'create')
+                ->name('admin.stores.create');
+            Route::post('/admin/stores', 'store')
+                ->name('admin.stores.store');
             Route::get('/admin/stores/{store}/edit', 'edit')
                 ->name('admin.stores.edit');
             Route::patch('/admin/stores/{store}', 'update')
                 ->name('admin.stores.update');
+            Route::post('/admin/stores/{store}/staff-members', 'addStaff')
+                ->name('admin.stores.staff.store');
+            Route::delete(
+                '/admin/stores/{store}/staff-members/{staff}',
+                'removeStaff',
+            )
+                ->whereNumber('staff')
+                ->name('admin.stores.staff.destroy');
+            Route::patch('/admin/stores/{store}/shift-managers', 'updateManagers')
+                ->name('admin.stores.managers.update');
+            Route::patch('/admin/stores/{store}/shift-patterns', 'updatePatterns')
+                ->name('admin.stores.patterns.update');
+            Route::patch('/admin/stores/{store}/staffing', 'updateStaffing')
+                ->name('admin.stores.staffing.update');
         });
 
         Route::controller(AdminShiftController::class)->group(function (): void {

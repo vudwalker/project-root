@@ -32,9 +32,17 @@ final class StorePolicy
             return true;
         }
 
-        return $store->isActive()
-            && $user->hasRole('shift_manager')
+        return $user->hasRole('shift_manager')
             && $this->hasCurrentManagerAssignment($user, $store);
+    }
+
+    /**
+     * 店舗を追加できるのはシステム管理者だけです。
+     */
+    public function createAdminStore(User $user): bool
+    {
+        return $user->canAccessAdmin()
+            && $user->hasRole('system_admin');
     }
 
     /**
@@ -53,6 +61,14 @@ final class StorePolicy
         return $user->canAccessAdmin()
             && $user->hasRole('system_admin')
             && (int) $user->organization_id === (int) $store->organization_id;
+    }
+
+    /**
+     * 担当シフト管理者を変更できるのは同一組織のシステム管理者だけです。
+     */
+    public function manageAdminStoreManagers(User $user, Store $store): bool
+    {
+        return $this->changeAdminStoreStatus($user, $store);
     }
 
     /**

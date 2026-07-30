@@ -10,8 +10,14 @@ final class UpdateAdminStoreRequest extends FormRequest
 {
     protected function prepareForValidation(): void
     {
-        if ($this->input('required_staff_count') === '') {
-            $this->merge(['required_staff_count' => null]);
+        foreach (['name', 'area'] as $field) {
+            if (is_string($this->input($field))) {
+                $this->merge([$field => trim($this->input($field))]);
+            }
+        }
+
+        if ($this->input('area') === '') {
+            $this->merge(['area' => null]);
         }
     }
 
@@ -33,32 +39,16 @@ final class UpdateAdminStoreRequest extends FormRequest
 
         return [
             'name' => ['bail', 'required', 'string', 'max:255'],
+            'area' => ['nullable', 'string', 'max:100'],
             'status' => $canChangeStatus
                 ? ['bail', 'required', 'string', Rule::in(['active', 'inactive'])]
                 : ['prohibited'],
-            'display_order' => ['bail', 'required', 'integer', 'min:0'],
-            'staffing_check_mode' => [
-                'bail',
-                'required',
-                'string',
-                Rule::in(['disabled', 'fixed_total', 'pattern_combinations']),
-            ],
-            'required_staff_count' => [
-                Rule::requiredIf(
-                    fn (): bool => $this->input('staffing_check_mode') === 'fixed_total',
-                ),
-                'nullable',
-                'integer',
-                'min:0',
-            ],
-            'filter_status' => [
-                'sometimes',
-                'string',
-                Rule::in(['all', 'active', 'inactive']),
-            ],
             ...collect([
                 'organization_id',
                 'code',
+                'display_order',
+                'staffing_check_mode',
+                'required_staff_count',
                 'deleted_at',
             ])->mapWithKeys(
                 fn (string $field): array => [$field => ['prohibited']],

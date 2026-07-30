@@ -46,6 +46,17 @@ class AdminStaticShiftUiTest extends TestCase
             ->assertDontSee('staff-shift.css')
             ->assertSee('name="year"', false)
             ->assertSee('name="month_number"', false);
+
+        $stylesheet = file_get_contents(public_path('css/admin-shift.css'));
+
+        $this->assertStringContainsString(
+            '--admin-store-grid-min-height: 220px;',
+            $stylesheet,
+        );
+        $this->assertStringContainsString(
+            '.admin-shift-grid-scroll:not(.admin-shift-grid-scroll--staff)',
+            $stylesheet,
+        );
     }
 
     public function test_admin_staff_shift_ui_is_read_only(): void
