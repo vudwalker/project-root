@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminShiftController;
 use App\Http\Controllers\Admin\AdminShiftMutationController;
+use App\Http\Controllers\Admin\AdminShiftPublicationController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\StaffShiftController;
 use App\Http\Middleware\EnsureAdminAccess;
@@ -54,4 +55,9 @@ Route::middleware(['auth', EnsureAdminAccess::class])
             Route::delete('/admin/shifts/stores/{store}/shifts/{shift}', 'destroy')
                 ->name('admin.shifts.destroy');
         });
+
+        Route::post(
+            '/admin/shifts/stores/{store}/publish',
+            [AdminShiftPublicationController::class, 'store'],
+        )->name('admin.shifts.publish');
     });

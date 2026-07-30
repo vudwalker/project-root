@@ -15,9 +15,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 /**
- * 管理者用シフト画面の下書き読み取り表示だけを担当します。
- *
- * 追加、削除、自動保存、配布は後続工程で実装します。
+ * 管理者用シフト画面の下書き読み取り表示を担当します。
  */
 final class AdminShiftController extends Controller
 {

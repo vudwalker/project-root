@@ -670,6 +670,10 @@ URLやリクエストの店舗IDだけを信用しない。
 スタッフ別確認画面の日別判定行は、シフトがある日だけ表示し、
 その日が警告対象なら`×`、警告対象でなければ`○`とする。
 
+画面右上には保存状態と配布状態だけを表示する。
+重複勤務や必要配置不備の警告は、警告パネル、日別判定行、
+対象セルの警告表示へ集約し、画面右上へ重複表示しない。
+
 人数不一致が残っている場合は、配布を許可しない。
 
 ---
@@ -689,13 +693,13 @@ URLやリクエストの店舗IDだけを信用しない。
 判定例：
 
 ```text
-published_versionがNULL
+published_draft_versionがNULL
 → 未配布
 
-published_version = draft_version
+published_draft_version = draft_version
 → 配布済み
 
-published_version < draft_version
+published_draft_version < draft_version
 → 再配布が必要
 ```
 
@@ -757,7 +761,11 @@ published_version < draft_version
 - 最終配布日時
 - 配布者
 - `published_version`
+- `published_draft_version`
 - 再配布必要表示
+
+同じ`draft_version`の配布リクエストが再送された場合は冪等に成功させ、
+`published_version`、最終配布日時、配布者を変更しない。
 
 ---
 

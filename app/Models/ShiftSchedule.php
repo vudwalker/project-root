@@ -13,9 +13,10 @@ class ShiftSchedule extends Model
         'target_month',
         'draft_version',
         'published_version',
+        'published_draft_version',
         'shift_updated_at',
         'published_at',
-        'published_by',
+        'published_by_user_id',
         'created_by',
         'updated_by',
     ];
@@ -26,6 +27,7 @@ class ShiftSchedule extends Model
             'target_month' => 'date',
             'draft_version' => 'integer',
             'published_version' => 'integer',
+            'published_draft_version' => 'integer',
             'shift_updated_at' => 'datetime',
             'published_at' => 'datetime',
         ];
@@ -53,6 +55,6 @@ class ShiftSchedule extends Model
 
     public function publisher(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'published_by');
+        return $this->belongsTo(User::class, 'published_by_user_id');
     }
 }

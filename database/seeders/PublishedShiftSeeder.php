@@ -42,9 +42,10 @@ class PublishedShiftSeeder extends Seeder
                 [
                     'draft_version' => 1,
                     'published_version' => 1,
+                    'published_draft_version' => 1,
                     'shift_updated_at' => self::PUBLISHED_AT,
                     'published_at' => self::PUBLISHED_AT,
-                    'published_by' => $manager->getKey(),
+                    'published_by_user_id' => $manager->getKey(),
                     'created_by' => $manager->getKey(),
                     'updated_by' => $manager->getKey(),
                 ],

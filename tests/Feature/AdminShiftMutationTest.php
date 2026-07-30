@@ -684,6 +684,11 @@ class AdminShiftMutationTest extends TestCase
             ->assertSee('data-create-shift-url=', false)
             ->assertSee('data-shift-url-template=', false)
             ->assertSee('data-shift-editor-cell', false)
+            ->assertSee('admin-shift-request.js', false)
+            ->assertSee('admin-shift-autosave.js', false)
+            ->assertSee('admin-shift-view.js', false)
+            ->assertSee('admin-shift-warning.js', false)
+            ->assertSee('admin-shift-publication.js', false)
             ->assertSee('admin-shift-editor.js', false);
 
         $staffResponse
@@ -691,9 +696,19 @@ class AdminShiftMutationTest extends TestCase
             ->assertDontSee('data-shift-editor', false)
             ->assertDontSee('data-create-shift-url=', false)
             ->assertDontSee('data-shift-editor-cell', false)
+            ->assertDontSee('admin-shift-request.js', false)
+            ->assertDontSee('admin-shift-autosave.js', false)
+            ->assertDontSee('admin-shift-view.js', false)
+            ->assertDontSee('admin-shift-warning.js', false)
+            ->assertDontSee('admin-shift-publication.js', false)
             ->assertDontSee('admin-shift-editor.js', false);
 
         $script = file_get_contents(public_path('js/admin-shift-editor.js'));
+        $requestScript = file_get_contents(public_path('js/admin-shift-request.js'));
+        $autosaveScript = file_get_contents(public_path('js/admin-shift-autosave.js'));
+        $viewScript = file_get_contents(public_path('js/admin-shift-view.js'));
+        $warningScript = file_get_contents(public_path('js/admin-shift-warning.js'));
+        $publicationScript = file_get_contents(public_path('js/admin-shift-publication.js'));
         $navigationScript = file_get_contents(public_path('js/admin-shift-static.js'));
 
         $this->assertStringContainsString('const DEBOUNCE_MS = 700;', $script);
@@ -710,6 +725,18 @@ class AdminShiftMutationTest extends TestCase
         $this->assertStringContainsString(
             "'admin-shift:autosave-state'",
             $navigationScript,
+        );
+        $this->assertStringContainsString('createRequestJsonClient', $requestScript);
+        $this->assertStringContainsString('createAutosaveQueue', $autosaveScript);
+        $this->assertStringContainsString('createShiftEditorView', $viewScript);
+        $this->assertStringContainsString('createShiftWarningPresenter', $warningScript);
+        $this->assertStringContainsString(
+            'createShiftPublicationController',
+            $publicationScript,
+        );
+        $this->assertStringContainsString(
+            'expected_draft_version: draftVersion',
+            $publicationScript,
         );
     }
 

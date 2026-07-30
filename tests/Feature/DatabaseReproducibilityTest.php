@@ -52,8 +52,10 @@ class DatabaseReproducibilityTest extends TestCase
         $this->assertTrue(Schema::hasColumns('shift_schedules', [
             'draft_version',
             'published_version',
+            'published_draft_version',
             'shift_updated_at',
             'published_at',
+            'published_by_user_id',
         ]));
         $this->assertTrue(Schema::hasColumns('shifts', [
             'shift_schedule_id',
@@ -112,13 +114,17 @@ class DatabaseReproducibilityTest extends TestCase
 
         $this->assertSame(1, $schedules->get('noda')->draft_version);
         $this->assertSame(1, $schedules->get('noda')->published_version);
+        $this->assertSame(1, $schedules->get('noda')->published_draft_version);
+        $this->assertNotNull($schedules->get('noda')->published_by_user_id);
 
         foreach (['daianji', 'saidaiji', 'okayama-tomida'] as $storeCode) {
             $schedule = $schedules->get($storeCode);
 
             $this->assertSame(1, $schedule->draft_version);
             $this->assertNull($schedule->published_version);
+            $this->assertNull($schedule->published_draft_version);
             $this->assertNull($schedule->published_at);
+            $this->assertNull($schedule->published_by_user_id);
             $this->assertSame(0, $schedule->publishedShifts()->count());
         }
 

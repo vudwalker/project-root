@@ -390,16 +390,17 @@ class AdminShiftOptimisticLockTest extends TestCase
             ->assertDontSee('expected_draft_version', false);
 
         $editorScript = file_get_contents(public_path('js/admin-shift-editor.js'));
+        $autosaveScript = file_get_contents(public_path('js/admin-shift-autosave.js'));
         $navigationScript = file_get_contents(public_path('js/admin-shift-static.js'));
 
         $this->assertGreaterThanOrEqual(
             3,
             substr_count($editorScript, 'expected_draft_version: draftVersion'),
         );
-        $this->assertStringContainsString('let networkBusy = false;', $editorScript);
-        $this->assertStringContainsString('let nextOperationId = 1;', $editorScript);
-        $this->assertStringContainsString('lastAppliedOperationId', $editorScript);
-        $this->assertStringContainsString('stopForConflict', $editorScript);
+        $this->assertStringContainsString('let networkBusy = false;', $autosaveScript);
+        $this->assertStringContainsString('let nextOperationId = 1;', $autosaveScript);
+        $this->assertStringContainsString('lastAppliedOperationId', $autosaveScript);
+        $this->assertStringContainsString('stopForConflict', $autosaveScript);
         $this->assertStringContainsString('queue.isStopped()', $editorScript);
         $this->assertStringContainsString('window.confirm(', $editorScript);
         $this->assertStringContainsString("saveState === 'conflict'", $navigationScript);

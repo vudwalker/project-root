@@ -14,9 +14,16 @@
         data-draft-version="{{ $screen['draftVersion'] }}"
         data-store-read-only="{{ $screen['isReadOnly'] ? 'true' : 'false' }}"
         data-target-month="{{ $calendar['month_value'] }}"
+        data-can-publish="{{ $screen['canPublish'] ? 'true' : 'false' }}"
+        data-publication-state="{{ $screen['publicationState'] }}"
+        data-published-version="{{ $screen['publishedVersion'] }}"
+        data-published-draft-version="{{ $screen['publishedDraftVersion'] }}"
+        data-published-at="{{ $screen['publishedAt'] }}"
+        data-published-by-user-id="{{ $screen['publishedByUserId'] }}"
         @if (! $screen['isReadOnly'])
             data-shift-editor
             data-create-shift-url="{{ route('admin.shifts.store', ['store' => $screen['contextStoreCode']]) }}"
+            data-publish-shifts-url="{{ route('admin.shifts.publish', ['store' => $screen['contextStoreCode']]) }}"
             data-shift-url-template="{{ route('admin.shifts.update', [
                 'store' => $screen['contextStoreCode'],
                 'shift' => '__SHIFT_ID__',
@@ -65,14 +72,25 @@
                     data-admin-save-status
                     aria-live="polite"
                 >{{ $screen['saveStatus'] }}</span>
-                <button
-                    class="admin-flat-button admin-publish-button"
-                    type="button"
-                    disabled
-                    title="{{ $screen['hasBlockingWarnings'] ? '警告を解消するまで配布できません' : '配布処理は次の段階で実装します' }}"
-                >
-                    シフト配布
-                </button>
+                @if (! $screen['isReadOnly'])
+                    <button
+                        class="admin-flat-button admin-publish-button"
+                        type="button"
+                        @disabled(
+                            ! $screen['canPublish']
+                            || ! $screen['hasSchedule']
+                            || $screen['publicationState'] === 'published'
+                        )
+                    >
+                        @if ($screen['publicationState'] === 'published')
+                            配布済み
+                        @elseif ($screen['publicationState'] === 'requires_republish')
+                            再配布
+                        @else
+                            シフト配布
+                        @endif
+                    </button>
+                @endif
             </div>
         </div>
 
@@ -106,5 +124,10 @@
 @endsection
 
 @push('scripts')
+    <script src="{{ asset('js/admin-shift-request.js') }}" defer></script>
+    <script src="{{ asset('js/admin-shift-autosave.js') }}" defer></script>
+    <script src="{{ asset('js/admin-shift-view.js') }}" defer></script>
+    <script src="{{ asset('js/admin-shift-warning.js') }}" defer></script>
+    <script src="{{ asset('js/admin-shift-publication.js') }}" defer></script>
     <script src="{{ asset('js/admin-shift-editor.js') }}" defer></script>
 @endpush

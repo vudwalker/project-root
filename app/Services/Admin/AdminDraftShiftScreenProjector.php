@@ -225,6 +225,47 @@ final class AdminDraftShiftScreenProjector
         );
     }
 
+    public function publicationState(?ShiftSchedule $schedule): string
+    {
+        if (! $schedule || $schedule->published_draft_version === null) {
+            return 'unpublished';
+        }
+
+        if ((int) $schedule->draft_version > (int) $schedule->published_draft_version) {
+            return 'requires_republish';
+        }
+
+        return 'published';
+    }
+
+    /**
+     * @param  array<string, mixed>  $warningResult
+     */
+    public function publicationStatusLabel(
+        ?ShiftSchedule $schedule,
+        array $warningResult,
+    ): string {
+        if (! $warningResult['can_publish']) {
+            return '修正が必要で配布不可';
+        }
+
+        $label = match ($this->publicationState($schedule)) {
+            'published' => '配布済み',
+            'requires_republish' => '再配布が必要',
+            default => '未配布',
+        };
+
+        if ($schedule?->published_at) {
+            return sprintf(
+                '%s（最終配布 %s）',
+                $label,
+                $schedule->published_at->format('n月j日 H:i'),
+            );
+        }
+
+        return $label;
+    }
+
     /**
      * @param  array<string, mixed>  $warningResult
      */

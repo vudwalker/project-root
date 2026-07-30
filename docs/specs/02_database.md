@@ -704,10 +704,11 @@ staff
 | store_id | bigint | 不可 | 対象店舗 |
 | target_month | date | 不可 | 対象月の月初日 |
 | draft_version | bigint | 不可 | 下書きバージョン |
-| published_version | bigint | 可 | 最終配布したバージョン |
+| published_version | bigint | 可 | 公開世代番号。初回配布は1、再配布成功ごとに1加算 |
+| published_draft_version | bigint | 可 | 最後に配布した時点の`draft_version` |
 | shift_updated_at | timestamp | 可 | シフト内容の最終更新日時 |
 | published_at | timestamp | 可 | 最終配布日時 |
-| published_by | bigint | 可 | 最終配布者 |
+| published_by_user_id | bigint | 可 | 最終配布者 |
 | created_by | bigint | 可 | 作成者 |
 | updated_by | bigint | 可 | 最終更新者 |
 | created_at | timestamp | 不可 | 作成日時 |
@@ -718,21 +719,22 @@ staff
 - `store_id + target_month`を一意にする
 - `target_month`には月初日を保存する
 - `draft_version`の初期値は`0`
-- `published_version`がNULLなら未配布
-- `draft_version`と`published_version`は0以上
-- `published_by`、`created_by`、`updated_by`は`users.id`への外部キー
+- 未配布時は`published_version`、`published_draft_version`、`published_at`、`published_by_user_id`をNULLにする
+- 配布済みの`published_version`は1以上
+- `draft_version`と`published_draft_version`は0以上
+- `published_by_user_id`、`created_by`、`updated_by`は`users.id`への外部キー
 
 状態判定：
 
 ```text
 未配布
-→ published_versionがNULL
+→ published_draft_versionがNULL
 
 配布済み
-→ published_version = draft_version
+→ published_draft_version = draft_version
 
 再配布が必要
-→ published_version < draft_version
+→ published_draft_version < draft_version
 ```
 
 `updated_at`を業務上のシフト最終更新日時として使用しない。
@@ -965,11 +967,20 @@ DB上の`draft_version`と一致しない場合は、無条件に上書きせず
 6. 同一スタッフの同一勤務基準日に2件以上の下書きシフトがないことを、店舗の同異を問わず検証
 7. `staffing_check_mode = pattern_combinations`の場合は必要シフトパターンの組み合わせを検証
 8. 不備があれば配布を中止
-9. 既存の`published_shifts`を削除
-10. 最新の`shifts`を`published_shifts`へコピー
-11. `published_version = draft_version`へ更新
-12. `published_at`と`published_by`を更新
-13. トランザクションを確定
+9. 新公開版データを準備
+10. 対象`shift_schedule_id`の既存`published_shifts`だけを削除
+11. 最新の`shifts`を`published_shifts`へコピー
+12. `published_version`を初回は1、再配布時は1加算して更新
+13. `published_draft_version = draft_version`へ更新
+14. `published_at`と`published_by_user_id`を更新
+15. トランザクションを確定
+
+対象の`shift_schedules`を`lockForUpdate`し、手順4以降は単一トランザクション内で行う。
+旧公開行の削除、新公開行の追加、公開メタデータ更新の途中で失敗した場合は、
+トランザクション全体をロールバックして旧公開版と公開メタデータを維持する。
+
+同じ`draft_version`がすでに配布済みの場合は冪等再送とし、
+`published_shifts`と公開メタデータを変更せず、`published_version`も加算しない。
 
 強制配布機能は設けない。
 
@@ -981,7 +992,7 @@ DB上の`draft_version`と一致しない場合は、無条件に上書きせず
 配布後に下書きを変更した場合は、以下の状態になる。
 
 ```text
-published_version < draft_version
+published_draft_version < draft_version
 ```
 
 この場合、管理画面には「再配布が必要」と表示する。
@@ -1282,7 +1293,7 @@ php artisan route:list
 - 必要配置不備を`blocking`警告として扱える
 - 下書きと公開版が分離される
 - 配布後の編集が公開版へ即時反映されない
-- `published_version < draft_version`で再配布必要を判定できる
+- `published_draft_version < draft_version`で再配布必要を判定できる
 - シフト最終更新日時を取得できる
 - 最終配布日時を取得できる
 - 配布時に下書きを検証し、公開版へ反映できる

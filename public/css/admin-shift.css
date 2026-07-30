@@ -287,11 +287,6 @@ body.admin-shift-page {
     text-overflow: ellipsis;
 }
 
-.admin-screen-status.is-warning {
-    color: var(--admin-warning-text);
-    font-size: 12px;
-}
-
 .admin-screen-status__separator {
     padding: 0 2px;
 }

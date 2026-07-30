@@ -59,4 +59,12 @@ final class StorePolicy
 
         return $user->hasRole('system_admin', 'shift_manager');
     }
+
+    /**
+     * 管理者用店舗別シフト編集画面から公開版を配布できるか判定します。
+     */
+    public function publishAdminShifts(User $user, Store $store): bool
+    {
+        return $this->editAdminShifts($user, $store);
+    }
 }

@@ -339,11 +339,15 @@ class DraftShiftWarningTest extends TestCase
             ->assertOk()
             ->assertSee(DraftShiftWarningCode::CrossStoreDuplicate->value, false)
             ->assertSee('data-warning-date="2026-08-18"', false)
-            ->assertSee('data-admin-warning-panel', false);
+            ->assertSee('data-admin-warning-panel', false)
+            ->assertSee('<div class="admin-screen-status" role="status">', false)
+            ->assertDontSee('admin-screen-status is-warning', false);
         $staffResponse
             ->assertOk()
             ->assertSee(DraftShiftWarningCode::CrossStoreDuplicate->value, false)
             ->assertSee('data-warning-date="2026-08-18"', false)
+            ->assertSee('<div class="admin-screen-status" role="status">', false)
+            ->assertDontSee('admin-screen-status is-warning', false)
             ->assertSee('data-read-only="true"', false)
             ->assertDontSee('data-shift-editor', false)
             ->assertDontSee('admin-shift-editor.js', false);
@@ -418,6 +422,7 @@ class DraftShiftWarningTest extends TestCase
     public function test_editor_applies_only_warning_results_for_current_draft_version(): void
     {
         $script = file_get_contents(public_path('js/admin-shift-editor.js'));
+        $warningScript = file_get_contents(public_path('js/admin-shift-warning.js'));
 
         $this->assertStringContainsString('applyWarningResult(payload.warning_result)', $script);
         $this->assertStringContainsString(
@@ -425,7 +430,10 @@ class DraftShiftWarningTest extends TestCase
             $script,
         );
         $this->assertStringContainsString('if (!result || queue.isStopped())', $script);
-        $this->assertStringContainsString('warningList.replaceChildren()', $script);
+        $this->assertStringContainsString(
+            'warningList.replaceChildren()',
+            $warningScript,
+        );
     }
 
     /**

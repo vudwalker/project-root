@@ -123,19 +123,9 @@
         </a>
     </nav>
 
-    <div
-        @class([
-            'admin-screen-status',
-            'is-warning' => $screen['hasBlockingWarnings'],
-        ])
-        role="{{ $screen['hasBlockingWarnings'] ? 'alert' : 'status' }}"
-    >
-        @if ($screen['warning'])
-            <strong>修正が必要：</strong>{{ $screen['warning'] }}
-        @else
-            <span>{{ $screen['saveStatus'] }}</span>
-            <span class="admin-screen-status__separator">／</span>
-            <span>{{ $screen['publishStatus'] }}</span>
-        @endif
+    <div class="admin-screen-status" role="status">
+        <span>{{ $screen['saveStatus'] }}</span>
+        <span class="admin-screen-status__separator">／</span>
+        <span>{{ $screen['publishStatus'] }}</span>
     </div>
 </header>

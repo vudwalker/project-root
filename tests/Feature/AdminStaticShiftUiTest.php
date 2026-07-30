@@ -86,16 +86,16 @@ class AdminStaticShiftUiTest extends TestCase
 
         $storeResponse
             ->assertOk()
-            ->assertSee('下書きに配布を止める警告が')
             ->assertSee('配布不可')
             ->assertSee('data-admin-warning-panel', false)
+            ->assertSee('data-admin-warning-count', false)
             ->assertSee('cross_store_duplicate', false);
 
         $staffResponse
             ->assertOk()
-            ->assertSee('下書きに配布を止める警告が')
             ->assertSee('配布不可')
             ->assertSee('data-admin-warning-panel', false)
+            ->assertSee('data-admin-warning-count', false)
             ->assertSee('cross_store_duplicate', false);
     }
 

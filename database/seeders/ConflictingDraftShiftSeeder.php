@@ -48,9 +48,10 @@ class ConflictingDraftShiftSeeder extends Seeder
                     [
                         'draft_version' => 1,
                         'published_version' => null,
+                        'published_draft_version' => null,
                         'shift_updated_at' => self::SHIFT_UPDATED_AT,
                         'published_at' => null,
-                        'published_by' => null,
+                        'published_by_user_id' => null,
                         'created_by' => $manager->getKey(),
                         'updated_by' => $manager->getKey(),
                     ],

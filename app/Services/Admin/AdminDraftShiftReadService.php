@@ -174,6 +174,12 @@ final class AdminDraftShiftReadService
             'emptyMessage' => $staffMembers->isEmpty() ? '所属スタッフがいません' : null,
             'isReadOnly' => ! $store->isActive(),
             'hasBlockingWarnings' => $warningResult['blocking_warning_count'] > 0,
+            'canPublish' => $warningResult['can_publish'],
+            'publicationState' => $this->screenProjector->publicationState($schedule),
+            'publishedVersion' => $schedule?->published_version,
+            'publishedDraftVersion' => $schedule?->published_draft_version,
+            'publishedAt' => $schedule?->published_at?->toIso8601String(),
+            'publishedByUserId' => $schedule?->published_by_user_id,
             'rows' => $rows,
             'dailyStatuses' => $this->screenProjector->makeDailyStatuses(
                 $calendar,
@@ -184,7 +190,8 @@ final class AdminDraftShiftReadService
             'monthlyTotal' => $this->screenProjector->aggregateRows($rows),
             'patterns' => $patterns,
             'saveStatus' => $this->screenProjector->storeSaveStatus($schedule),
-            'publishStatus' => $this->screenProjector->publishEligibilityLabel(
+            'publishStatus' => $this->screenProjector->publicationStatusLabel(
+                $schedule,
                 $warningResult,
             ),
             'warning' => $this->screenProjector->warningSummary($warningResult),
@@ -263,7 +270,7 @@ final class AdminDraftShiftReadService
                     });
             })
             ->with([
-                'schedule:id,store_id,target_month,shift_updated_at,draft_version,published_version,published_at',
+                'schedule:id,store_id,target_month,shift_updated_at,draft_version,published_version,published_draft_version,published_at',
                 'schedule.store:id,name,status,display_order',
             ])
             ->orderBy('work_date')
