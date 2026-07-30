@@ -45,10 +45,11 @@ class DatabaseReproducibilityTest extends TestCase
 
         $this->assertTrue(Schema::hasColumns('users', [
             'organization_id',
-            'primary_store_id',
             'status',
             'deleted_at',
         ]));
+        $this->assertFalse(Schema::hasColumn('users', 'primary_store_id'));
+        $this->assertFalse(Schema::hasColumn('stores', 'status'));
         $this->assertTrue(Schema::hasColumn('stores', 'area'));
         $this->assertTrue(Schema::hasColumns('shift_schedules', [
             'draft_version',
@@ -63,7 +64,7 @@ class DatabaseReproducibilityTest extends TestCase
             'store_shift_pattern_id',
             'entry_uuid',
             'pattern_code',
-            'work_minutes',
+            'work_hours',
         ]));
         $this->assertTrue(Schema::hasColumns('store_shift_patterns', [
             'start_time',
@@ -186,7 +187,7 @@ class DatabaseReproducibilityTest extends TestCase
             'work_date' => CarbonImmutable::create(2026, 8, 1),
             'sequence' => 1,
             'pattern_code' => 'C',
-            'work_minutes' => 390,
+            'work_hours' => '6.50',
             'published_at' => CarbonImmutable::create(2026, 7, 31, 12),
         ]);
         $publishedCount = PublishedShift::query()->count();

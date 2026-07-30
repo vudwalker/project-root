@@ -163,7 +163,7 @@ class AdminShiftOptimisticLockTest extends TestCase
         $shiftAfterAdmin = Shift::query()->findOrFail($shiftId)->only([
             'store_shift_pattern_id',
             'pattern_code',
-            'work_minutes',
+            'work_hours',
             'updated_by',
         ]);
 
@@ -352,7 +352,6 @@ class AdminShiftOptimisticLockTest extends TestCase
             'organization_id' => $foreignOrganization->getKey(),
             'code' => 'conflict-test-foreign-store',
             'name' => '競合テスト別組織店舗',
-            'status' => 'active',
             'display_order' => 1,
             'staffing_check_mode' => 'disabled',
             'required_staff_count' => null,

@@ -39,77 +39,66 @@ class RoleUserSeeder extends Seeder
                 'admin' => [
                     'name' => 'システム管理者',
                     'email' => 'admin@example.com',
-                    'primary_store' => null,
                     'status' => 'active',
                     'roles' => ['system_admin'],
                 ],
                 'manager' => [
                     'name' => 'シフト管理者',
                     'email' => 'manager@example.com',
-                    'primary_store' => null,
                     'status' => 'active',
                     'roles' => ['shift_manager'],
                 ],
                 'chikazawa' => [
                     'name' => '近澤幸次',
                     'email' => 'staff@example.com',
-                    'primary_store' => 'daianji',
                     'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'otsuki' => [
                     'name' => '大月敦弘',
                     'email' => 'otsuki@example.com',
-                    'primary_store' => 'daianji',
                     'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'fujimoto' => [
                     'name' => '藤本保子',
                     'email' => 'fujimoto@example.com',
-                    'primary_store' => 'daianji',
                     'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'motoyama' => [
                     'name' => '本山宏明',
                     'email' => 'motoyama@example.com',
-                    'primary_store' => 'daianji',
                     'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'oai' => [
                     'name' => '小合達也',
                     'email' => 'oai@example.com',
-                    'primary_store' => 'daianji',
                     'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'miyake' => [
                     'name' => '三宅由幸',
                     'email' => 'miyake@example.com',
-                    'primary_store' => 'noda',
                     'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'morinaga' => [
                     'name' => '森永俊巳',
                     'email' => 'morinaga@example.com',
-                    'primary_store' => 'noda',
                     'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'kawamoto' => [
                     'name' => '河本健二',
                     'email' => 'kawamoto@example.com',
-                    'primary_store' => 'noda',
                     'status' => 'active',
                     'roles' => ['staff'],
                 ],
                 'shimizu' => [
                     'name' => '清水輝夫',
                     'email' => 'shimizu@example.com',
-                    'primary_store' => 'noda',
                     'status' => 'active',
                     'roles' => ['staff'],
                 ],
@@ -119,14 +108,12 @@ class RoleUserSeeder extends Seeder
                 $users['manager_only'] = [
                     'name' => 'シフト管理者専用',
                     'email' => 'manager-only@example.com',
-                    'primary_store' => null,
                     'status' => 'active',
                     'roles' => ['shift_manager'],
                 ];
                 $users['inactive'] = [
                     'name' => '利用停止スタッフ',
                     'email' => 'inactive@example.com',
-                    'primary_store' => 'daianji',
                     'status' => 'retired',
                     'roles' => ['staff'],
                 ];
@@ -136,15 +123,10 @@ class RoleUserSeeder extends Seeder
             $models = [];
 
             foreach ($users as $key => $attributes) {
-                $primaryStore = $attributes['primary_store'] === null
-                    ? null
-                    : $stores->get($attributes['primary_store']);
-
                 $models[$key] = $this->updateOrCreateUser(
                     email: $attributes['email'],
                     attributes: [
                         'organization_id' => $organization->getKey(),
-                        'primary_store_id' => $primaryStore?->getKey(),
                         'name' => $attributes['name'],
                         'status' => $attributes['status'],
                     ],
@@ -220,7 +202,7 @@ class RoleUserSeeder extends Seeder
     }
 
     /**
-     * @param  array{organization_id: int, primary_store_id: ?int, name: string, status: string}  $attributes
+     * @param  array{organization_id: int, name: string, status: string}  $attributes
      */
     private function updateOrCreateUser(
         string $email,

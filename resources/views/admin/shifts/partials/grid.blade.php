@@ -115,7 +115,7 @@
                                     data-entry-uuid="{{ $shift['entryUuid'] }}"
                                     data-sequence="{{ $shift['sequence'] }}"
                                     data-shift-pattern-id="{{ $shift['shiftPatternId'] }}"
-                                    data-work-minutes="{{ $shift['workMinutes'] }}"
+                                    data-work-hours="{{ $shift['workHours'] }}"
                                     @if ($screenType === 'store' && ! $screen['isReadOnly'])
                                         tabindex="0"
                                         role="button"
@@ -130,9 +130,9 @@
                             'admin-monthly-start',
                             'admin-monthly-bottom' => $loop->last,
                         ])
-                        data-row-summary="time"
+                        data-row-summary="work-hours"
                     >
-                        {{ $row['isSpacer'] ? '' : $row['monthlyTotal']['time'] }}
+                        {{ $row['isSpacer'] ? '' : $row['monthlyTotal']['workHours'] }}
                     </td>
                     @foreach (['A', 'B', 'C', 'D', 'E'] as $code)
                         <td
@@ -204,9 +204,9 @@
                 @endforeach
                 <td
                     class="admin-shift-grid__monthly-footer admin-shift-grid__monthly-footer--time admin-summary-start"
-                    data-grid-summary="time"
+                    data-grid-summary="work-hours"
                 >
-                    {{ $screen['monthlyTotal']['time'] }}
+                    {{ $screen['monthlyTotal']['workHours'] }}
                 </td>
                 @foreach (['A', 'B', 'C', 'D', 'E'] as $code)
                     <td class="admin-shift-grid__monthly-footer" data-grid-summary-code="{{ $code }}">

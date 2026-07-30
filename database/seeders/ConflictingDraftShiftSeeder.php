@@ -60,7 +60,7 @@ class ConflictingDraftShiftSeeder extends Seeder
                 foreach ($staffShifts as $email => $entries) {
                     $user = $users->get($email);
 
-                    foreach ($entries as [$day, $code, $workMinutes]) {
+                    foreach ($entries as [$day, $code, $workHours]) {
                         $workDate = CarbonImmutable::create(2026, 7, $day);
                         $workDateString = $workDate->toDateString();
                         $entryUuid = Uuid::uuid5(
@@ -79,7 +79,7 @@ class ConflictingDraftShiftSeeder extends Seeder
                                 'store_shift_pattern_id' => $patterns->get($code)->getKey(),
                                 'entry_uuid' => $entryUuid,
                                 'pattern_code' => $code,
-                                'work_minutes' => $workMinutes,
+                                'work_hours' => $workHours,
                                 'created_by' => $manager->getKey(),
                                 'updated_by' => $manager->getKey(),
                             ],
@@ -100,60 +100,60 @@ class ConflictingDraftShiftSeeder extends Seeder
         return [
             'daianji' => [
                 'staff@example.com' => [
-                    [2, 'C', 450],
-                    [7, 'C', 450],
-                    [13, 'C', 450],
-                    [14, 'C', 450],
-                    [21, 'C', 450],
-                    [22, 'C', 450],
-                    [28, 'C', 450],
+                    [2, 'C', '7.50'],
+                    [7, 'C', '7.50'],
+                    [13, 'C', '7.50'],
+                    [14, 'C', '7.50'],
+                    [21, 'C', '7.50'],
+                    [22, 'C', '7.50'],
+                    [28, 'C', '7.50'],
                 ],
                 'otsuki@example.com' => [
-                    [2, 'C', 450],
-                    [5, 'C', 450],
-                    [9, 'C', 450],
-                    [12, 'C', 450],
-                    [16, 'C', 450],
-                    [19, 'C', 450],
-                    [23, 'C', 450],
-                    [26, 'C', 450],
-                    [30, 'C', 450],
+                    [2, 'C', '7.50'],
+                    [5, 'C', '7.50'],
+                    [9, 'C', '7.50'],
+                    [12, 'C', '7.50'],
+                    [16, 'C', '7.50'],
+                    [19, 'C', '7.50'],
+                    [23, 'C', '7.50'],
+                    [26, 'C', '7.50'],
+                    [30, 'C', '7.50'],
                 ],
                 'fujimoto@example.com' => [
-                    [4, 'C', 450],
-                    [8, 'C', 450],
-                    [10, 'C', 450],
-                    [17, 'C', 450],
-                    [18, 'C', 450],
-                    [24, 'C', 450],
-                    [25, 'C', 450],
+                    [4, 'C', '7.50'],
+                    [8, 'C', '7.50'],
+                    [10, 'C', '7.50'],
+                    [17, 'C', '7.50'],
+                    [18, 'C', '7.50'],
+                    [24, 'C', '7.50'],
+                    [25, 'C', '7.50'],
                 ],
                 'motoyama@example.com' => [
-                    [1, 'C', 450],
-                    [3, 'C', 450],
-                    [8, 'C', 450],
-                    [11, 'C', 450],
-                    [15, 'C', 450],
-                    [21, 'C', 450],
-                    [27, 'C', 450],
-                    [29, 'C', 450],
-                    [31, 'C', 450],
+                    [1, 'C', '7.50'],
+                    [3, 'C', '7.50'],
+                    [8, 'C', '7.50'],
+                    [11, 'C', '7.50'],
+                    [15, 'C', '7.50'],
+                    [21, 'C', '7.50'],
+                    [27, 'C', '7.50'],
+                    [29, 'C', '7.50'],
+                    [31, 'C', '7.50'],
                 ],
                 'oai@example.com' => [
-                    [10, 'C', 450],
-                    [14, 'C', 450],
+                    [10, 'C', '7.50'],
+                    [14, 'C', '7.50'],
                 ],
             ],
             'saidaiji' => [
                 'staff@example.com' => [
-                    [7, 'A', 450],
-                    [11, 'C', 450],
+                    [7, 'A', '7.50'],
+                    [11, 'C', '7.50'],
                 ],
             ],
             'okayama-tomida' => [
                 'staff@example.com' => [
-                    [11, 'B', 420],
-                    [31, 'C', 450],
+                    [11, 'B', '7.00'],
+                    [31, 'C', '7.50'],
                 ],
             ],
         ];

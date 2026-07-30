@@ -120,7 +120,7 @@
                         type: 'pattern',
                         patternId: Number(button.dataset.shiftPatternId),
                         patternCode: button.dataset.shiftPatternCode,
-                        workMinutes: Number(button.dataset.workMinutes),
+                        workHours: button.dataset.workHours,
                     };
                 setModeStatus(
                     selectedMode.type === 'delete'
@@ -201,7 +201,7 @@
         shift.dataset.entryUuid = entryUuid;
         shift.dataset.sequence = String(sequence);
         shift.dataset.shiftPatternId = String(pattern.patternId);
-        shift.dataset.workMinutes = String(pattern.workMinutes);
+        shift.dataset.workHours = pattern.workHours;
         shift.dataset.queueKey = `entry:${entryUuid}`;
         shift.textContent = pattern.patternCode;
         cell.appendChild(shift);
@@ -219,7 +219,7 @@
         }
 
         shift.dataset.shiftPatternId = String(pattern.patternId);
-        shift.dataset.workMinutes = String(pattern.workMinutes);
+        shift.dataset.workHours = pattern.workHours;
         shift.textContent = pattern.patternCode;
 
         recalculateSummaries();

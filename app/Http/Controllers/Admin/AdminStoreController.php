@@ -3,18 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Admin\AdminStoreEditRequest;
+use App\Http\Requests\Admin\AdminStoreCandidateSearchRequest;
 use App\Http\Requests\Admin\AdminStoreIndexRequest;
 use App\Http\Requests\Admin\StoreAdminStoreRequest;
-use App\Http\Requests\Admin\StoreAdminStoreStaffRequest;
-use App\Http\Requests\Admin\UpdateAdminStoreManagersRequest;
-use App\Http\Requests\Admin\UpdateAdminStorePatternsRequest;
-use App\Http\Requests\Admin\UpdateAdminStoreRequest;
-use App\Http\Requests\Admin\UpdateAdminStoreStaffingRequest;
+use App\Http\Requests\Admin\UpdateAdminStoreDetailsRequest;
 use App\Models\Store;
 use App\Models\User;
 use App\Services\Admin\AdminStoreAssociationService;
 use App\Services\Admin\AdminStoreManagementService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -68,146 +65,77 @@ final class AdminStoreController extends Controller
             ->with('status', '店舗を追加しました。詳細設定を続けてください。');
     }
 
-    public function edit(AdminStoreEditRequest $request, string $store): View
+    public function edit(Request $request, string $store): View
     {
         $actor = $this->actor($request);
         $targetStore = $this->storeService->resolveEditableStore($actor, $store);
-        $staffAddOpen = $request->staffAddOpen();
-        $staffQuery = $request->staffQuery();
-        $staffSearchResults = $staffAddOpen && $staffQuery !== ''
-            ? $this->storeService->searchUnassignedStaff(
-                $targetStore,
-                $staffQuery,
-            )
-            : collect();
 
         return view('admin.stores.edit', [
-            ...$this->storeService->detailData($targetStore),
-            'canChangeStatus' => Gate::forUser($actor)->allows(
-                'changeAdminStoreStatus',
+            ...$this->storeService->detailData(
                 $targetStore,
+                $request->session()->getOldInput(),
             ),
             'canManageManagers' => Gate::forUser($actor)->allows(
                 'manageAdminStoreManagers',
                 $targetStore,
             ),
             'loginUserName' => $actor->name,
-            'staffAddOpen' => $staffAddOpen,
-            'staffQuery' => $staffQuery,
-            'staffSearchResults' => $staffSearchResults,
         ]);
     }
 
     public function update(
-        UpdateAdminStoreRequest $request,
+        UpdateAdminStoreDetailsRequest $request,
         string $store,
     ): RedirectResponse {
         $actor = $this->actor($request);
         $targetStore = $this->storeService->resolveEditableStore($actor, $store);
-        $attributes = $request->validated();
-
-        if (array_key_exists('status', $attributes)) {
-            Gate::forUser($actor)->authorize(
-                'changeAdminStoreStatus',
+        $this->associationService->updateStoreDetails(
+            $targetStore,
+            $actor,
+            $request->validated(),
+            Gate::forUser($actor)->allows(
+                'manageAdminStoreManagers',
                 $targetStore,
-            );
-        }
+            ),
+        );
 
-        $this->storeService->updateBasic($targetStore, $attributes);
-
-        return $this->updatedRedirect($targetStore, '基本情報を更新しました。');
+        return $this->updatedRedirect($targetStore, '店舗情報を保存しました。');
     }
 
-    public function addStaff(
-        StoreAdminStoreStaffRequest $request,
+    public function staffCandidates(
+        AdminStoreCandidateSearchRequest $request,
         string $store,
-    ): RedirectResponse {
+    ): JsonResponse {
         $targetStore = $this->resolveForUpdate($request, $store);
-        $this->associationService->addStaffMembership(
-            $targetStore,
-            $request->staffUserId(),
-        );
 
-        return $this->updatedRedirect(
-            $targetStore,
-            'スタッフを所属に追加しました。',
-            'staff-members',
-        );
+        return response()->json([
+            'data' => $this->storeService
+                ->searchUnassignedStaff($targetStore, $request->searchTerm())
+                ->map(fn (User $user): array => $this->candidatePayload($user))
+                ->values(),
+        ]);
     }
 
-    public function removeStaff(
-        Request $request,
+    public function managerCandidates(
+        AdminStoreCandidateSearchRequest $request,
         string $store,
-        string $staff,
-    ): RedirectResponse {
-        $targetStore = $this->resolveForUpdate($request, $store);
-        $this->associationService->removeStaffMembership(
-            $targetStore,
-            (int) $staff,
-        );
-
-        return $this->updatedRedirect(
-            $targetStore,
-            'スタッフの所属を解除しました。',
-            'staff-members',
-        );
-    }
-
-    public function updateManagers(
-        UpdateAdminStoreManagersRequest $request,
-        string $store,
-    ): RedirectResponse {
+    ): JsonResponse {
         $actor = $this->actor($request);
         $targetStore = $this->storeService->resolveEditableStore($actor, $store);
-
         Gate::forUser($actor)->authorize(
             'manageAdminStoreManagers',
             $targetStore,
         );
-        $this->associationService->updateShiftManagers(
-            $targetStore,
-            $request->managerUserIds(),
-        );
 
-        return $this->updatedRedirect(
-            $targetStore,
-            '担当シフト管理者を更新しました。',
-            'shift-managers',
-        );
-    }
-
-    public function updatePatterns(
-        UpdateAdminStorePatternsRequest $request,
-        string $store,
-    ): RedirectResponse {
-        $targetStore = $this->resolveForUpdate($request, $store);
-        $this->associationService->updateShiftPatterns(
-            $targetStore,
-            $request->patterns(),
-        );
-
-        return $this->updatedRedirect(
-            $targetStore,
-            '使用シフトパターンを更新しました。',
-            'shift-patterns',
-        );
-    }
-
-    public function updateStaffing(
-        UpdateAdminStoreStaffingRequest $request,
-        string $store,
-    ): RedirectResponse {
-        $targetStore = $this->resolveForUpdate($request, $store);
-        $this->associationService->updateStaffing(
-            $targetStore,
-            $request->validated(),
-        );
-
-        return $this->updatedRedirect(
-            $targetStore,
-            '人数配置判定を更新しました。',
-            'staffing-settings',
-        );
+        return response()->json([
+            'data' => $this->storeService
+                ->searchUnassignedManagers(
+                    $targetStore,
+                    $request->searchTerm(),
+                )
+                ->map(fn (User $user): array => $this->candidatePayload($user))
+                ->values(),
+        ]);
     }
 
     private function resolveForUpdate(Request $request, string $store): Store
@@ -225,6 +153,18 @@ final class AdminStoreController extends Controller
         abort_unless($actor instanceof User, 403);
 
         return $actor;
+    }
+
+    /**
+     * @return array{id: int, name: string, email: string}
+     */
+    private function candidatePayload(User $user): array
+    {
+        return [
+            'id' => (int) $user->getKey(),
+            'name' => $user->name,
+            'email' => $user->email,
+        ];
     }
 
     private function updatedRedirect(

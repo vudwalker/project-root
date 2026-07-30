@@ -50,20 +50,14 @@ Route::middleware(['auth', EnsureAdminAccess::class])
                 ->name('admin.stores.edit');
             Route::patch('/admin/stores/{store}', 'update')
                 ->name('admin.stores.update');
-            Route::post('/admin/stores/{store}/staff-members', 'addStaff')
-                ->name('admin.stores.staff.store');
-            Route::delete(
-                '/admin/stores/{store}/staff-members/{staff}',
-                'removeStaff',
-            )
-                ->whereNumber('staff')
-                ->name('admin.stores.staff.destroy');
-            Route::patch('/admin/stores/{store}/shift-managers', 'updateManagers')
-                ->name('admin.stores.managers.update');
-            Route::patch('/admin/stores/{store}/shift-patterns', 'updatePatterns')
-                ->name('admin.stores.patterns.update');
-            Route::patch('/admin/stores/{store}/staffing', 'updateStaffing')
-                ->name('admin.stores.staffing.update');
+            Route::get(
+                '/admin/stores/{store}/staff-candidates',
+                'staffCandidates',
+            )->name('admin.stores.staff.candidates');
+            Route::get(
+                '/admin/stores/{store}/manager-candidates',
+                'managerCandidates',
+            )->name('admin.stores.manager.candidates');
         });
 
         Route::controller(AdminShiftController::class)->group(function (): void {

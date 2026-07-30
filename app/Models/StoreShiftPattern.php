@@ -14,7 +14,7 @@ class StoreShiftPattern extends Model
     protected $fillable = [
         'store_id',
         'code',
-        'work_minutes',
+        'work_hours',
         'start_time',
         'start_day_offset',
         'end_time',
@@ -26,7 +26,7 @@ class StoreShiftPattern extends Model
     protected function casts(): array
     {
         return [
-            'work_minutes' => 'integer',
+            'work_hours' => 'decimal:2',
             'start_day_offset' => 'integer',
             'end_day_offset' => 'integer',
             'display_order' => 'integer',

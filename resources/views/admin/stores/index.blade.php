@@ -89,30 +89,17 @@
                         <th scope="col">店舗コード</th>
                         <th scope="col">エリア</th>
                         <th scope="col">担当シフト管理者</th>
-                        <th scope="col">有効・無効</th>
                         <th scope="col">操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($stores as $store)
-                        <tr
-                            data-store-code="{{ $store->code }}"
-                            data-store-status="{{ $store->status }}"
-                        >
+                        <tr data-store-code="{{ $store->code }}">
                             <th scope="row">{{ $store->name }}</th>
                             <td>{{ $store->code }}</td>
                             <td>{{ $store->area ?? '未設定' }}</td>
                             <td>
                                 {{ $store->shiftManagers->pluck('name')->join('、') ?: '未設定' }}
-                            </td>
-                            <td>
-                                <span @class([
-                                    'admin-store-status',
-                                    'is-active' => $store->status === 'active',
-                                    'is-inactive' => $store->status === 'inactive',
-                                ])>
-                                    {{ $store->status === 'active' ? '有効' : '無効' }}
-                                </span>
                             </td>
                             <td>
                                 <a
@@ -127,7 +114,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td class="admin-store-table__empty" colspan="6">
+                            <td class="admin-store-table__empty" colspan="5">
                                 条件に一致する店舗はありません。
                             </td>
                         </tr>

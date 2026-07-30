@@ -60,18 +60,6 @@
                 >
             </label>
 
-            <label class="admin-store-form__field">
-                <span>有効・無効</span>
-                <select name="status" required>
-                    <option value="active" @selected(old('status', 'active') === 'active')>
-                        有効
-                    </option>
-                    <option value="inactive" @selected(old('status') === 'inactive')>
-                        無効
-                    </option>
-                </select>
-            </label>
-
             <div class="admin-store-form__actions">
                 <button type="submit">店舗を追加</button>
                 <a href="{{ route('admin.stores.index') }}">キャンセル</a>

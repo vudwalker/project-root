@@ -33,20 +33,32 @@ final class AdminShiftWriteTargetResolver
                     'staff',
                 ),
             )
-            ->whereHas('stores', function (Builder $builder) use ($store, $date): void {
-                $builder
-                    ->where('stores.id', $store->getKey())
-                    ->where('store_user.is_active', true)
-                    ->where(function (Builder $period) use ($date): void {
-                        $period
-                            ->whereNull('store_user.started_on')
-                            ->orWhereDate('store_user.started_on', '<=', $date);
+            ->where(function (Builder $eligible) use ($store, $date, $workDate): void {
+                $eligible
+                    ->whereHas('stores', function (Builder $builder) use ($store, $date): void {
+                        $builder
+                            ->where('stores.id', $store->getKey())
+                            ->where('store_user.is_active', true)
+                            ->where(function (Builder $period) use ($date): void {
+                                $period
+                                    ->whereNull('store_user.started_on')
+                                    ->orWhereDate('store_user.started_on', '<=', $date);
+                            })
+                            ->where(function (Builder $period) use ($date): void {
+                                $period
+                                    ->whereNull('store_user.ended_on')
+                                    ->orWhereDate('store_user.ended_on', '>=', $date);
+                            });
                     })
-                    ->where(function (Builder $period) use ($date): void {
-                        $period
-                            ->whereNull('store_user.ended_on')
-                            ->orWhereDate('store_user.ended_on', '>=', $date);
-                    });
+                    ->orWhereHas(
+                        'shifts.schedule',
+                        fn (Builder $schedule): Builder => $schedule
+                            ->where('store_id', $store->getKey())
+                            ->whereDate(
+                                'target_month',
+                                $workDate->startOfMonth()->toDateString(),
+                            ),
+                    );
             })
             ->first();
 

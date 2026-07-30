@@ -6,6 +6,7 @@ use App\Models\Shift;
 use App\Models\ShiftSchedule;
 use App\Models\Store;
 use App\Models\User;
+use App\Support\WorkHours;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
 
@@ -158,16 +159,16 @@ final class AdminDraftShiftScreenProjector
 
     /**
      * @param  list<array<string, mixed>>  $rows
-     * @return array{minutes: int, time: string, counts: array<string, int>, total: int}
+     * @return array{workHourHundredths: int, workHours: string, counts: array<string, int>, total: int}
      */
     public function aggregateRows(array $rows): array
     {
-        $minutes = 0;
+        $workHourHundredths = 0;
         $counts = array_fill_keys(['A', 'B', 'C', 'D', 'E'], 0);
         $total = 0;
 
         foreach ($rows as $row) {
-            $minutes += $row['monthlyTotal']['minutes'];
+            $workHourHundredths += $row['monthlyTotal']['workHourHundredths'];
             $total += $row['monthlyTotal']['total'];
 
             foreach (array_keys($counts) as $code) {
@@ -176,21 +177,21 @@ final class AdminDraftShiftScreenProjector
         }
 
         return [
-            'minutes' => $minutes,
-            'time' => $this->formatMinutes($minutes),
+            'workHourHundredths' => $workHourHundredths,
+            'workHours' => WorkHours::formatHundredths($workHourHundredths),
             'counts' => $counts,
             'total' => $total,
         ];
     }
 
     /**
-     * @return array{minutes: int, time: string, counts: array<string, int>, total: int}
+     * @return array{workHourHundredths: int, workHours: string, counts: array<string, int>, total: int}
      */
     public function emptyMonthlyTotal(): array
     {
         return [
-            'minutes' => 0,
-            'time' => '0:00',
+            'workHourHundredths' => 0,
+            'workHours' => '0',
             'counts' => array_fill_keys(['A', 'B', 'C', 'D', 'E'], 0),
             'total' => 0,
         ];
@@ -365,7 +366,7 @@ final class AdminDraftShiftScreenProjector
                     'sequence' => (int) $shift->sequence,
                     'shiftPatternId' => (int) $shift->store_shift_pattern_id,
                     'code' => $shift->pattern_code,
-                    'workMinutes' => (int) $shift->work_minutes,
+                    'workHours' => WorkHours::format($shift->work_hours),
                 ])
                 ->all(),
             'isWarning' => $cellWarnings->isNotEmpty(),
@@ -376,11 +377,13 @@ final class AdminDraftShiftScreenProjector
 
     /**
      * @param  SupportCollection<int, Shift>  $shifts
-     * @return array{minutes: int, time: string, counts: array<string, int>, total: int}
+     * @return array{workHourHundredths: int, workHours: string, counts: array<string, int>, total: int}
      */
     private function makeMonthlyTotal(SupportCollection $shifts): array
     {
-        $minutes = (int) $shifts->sum('work_minutes');
+        $workHourHundredths = $shifts->sum(
+            fn (Shift $shift): int => WorkHours::toHundredths($shift->work_hours),
+        );
         $counts = array_fill_keys(['A', 'B', 'C', 'D', 'E'], 0);
 
         foreach ($shifts as $shift) {
@@ -390,15 +393,10 @@ final class AdminDraftShiftScreenProjector
         }
 
         return [
-            'minutes' => $minutes,
-            'time' => $this->formatMinutes($minutes),
+            'workHourHundredths' => $workHourHundredths,
+            'workHours' => WorkHours::formatHundredths($workHourHundredths),
             'counts' => $counts,
             'total' => $shifts->count(),
         ];
-    }
-
-    private function formatMinutes(int $minutes): string
-    {
-        return sprintf('%d:%02d', intdiv($minutes, 60), $minutes % 60);
     }
 }

@@ -2,6 +2,59 @@
 
 @section('title', $store->name.' 店舗詳細｜管理画面')
 
+@php
+    $patternRows = old('patterns');
+
+    if (! is_array($patternRows)) {
+        $patternRows = $shiftPatterns->map(fn ($pattern) => [
+            'id' => $pattern->id,
+            'code' => $pattern->code,
+            'start_time' => $pattern->start_time
+                ? substr((string) $pattern->start_time, 0, 5)
+                : null,
+            'end_time' => $pattern->end_time
+                ? substr((string) $pattern->end_time, 0, 5)
+                : null,
+            'work_hours' => \App\Support\WorkHours::format($pattern->work_hours),
+        ])->all();
+    }
+
+    $staffingOptions = $staffingRequirement?->options ?? collect();
+    $staffingRows = old('staffing_options');
+
+    if (! is_array($staffingRows)) {
+        $staffingRows = $staffingOptions->map(function ($option) use ($shiftPatterns) {
+            $counts = [];
+
+            foreach ($shiftPatterns as $pattern) {
+                $optionPattern = $option->patterns->firstWhere(
+                    'store_shift_pattern_id',
+                    $pattern->id,
+                );
+                $counts[$pattern->id] = $optionPattern?->required_count;
+            }
+
+            return [
+                'id' => $option->id,
+                'code' => $option->code,
+                'display_order' => $option->display_order,
+                'pattern_counts' => $counts,
+                'remove' => 0,
+            ];
+        })->all();
+
+        $staffingRows[] = [
+            'id' => null,
+            'code' => '',
+            'display_order' => $staffingOptions->count() + 1,
+            'pattern_counts' => [],
+            'remove' => 0,
+        ];
+    }
+
+    $staffingMode = old('staffing_check_mode', $store->staffing_check_mode);
+@endphp
+
 @section('content')
     <section class="admin-store-management" aria-labelledby="admin-store-edit-title">
         <header class="admin-store-management__header">
@@ -36,375 +89,327 @@
             <a href="#staffing-settings">人数配置判定</a>
         </nav>
 
-        <section id="basic-information" class="admin-store-detail-section">
-            <h2>基本情報</h2>
-            <form
-                class="admin-store-form admin-store-form--section"
-                method="POST"
-                action="{{ route('admin.stores.update', ['store' => $store->code]) }}"
-            >
-                @csrf
-                @method('PATCH')
+        <form
+            class="admin-store-detail-form"
+            method="POST"
+            action="{{ route('admin.stores.update', ['store' => $store->code]) }}"
+            data-store-detail-form
+            data-staff-candidates-url="{{ route('admin.stores.staff.candidates', ['store' => $store->code]) }}"
+            @if ($canManageManagers)
+                data-manager-candidates-url="{{ route('admin.stores.manager.candidates', ['store' => $store->code]) }}"
+            @endif
+        >
+            @csrf
+            @method('PATCH')
 
-                <label class="admin-store-form__field">
-                    <span>店舗名</span>
-                    <input
-                        type="text"
-                        name="name"
-                        value="{{ old('name', $store->name) }}"
-                        maxlength="255"
-                        required
-                    >
-                </label>
-
-                <dl class="admin-store-form__read-only">
-                    <div>
-                        <dt>店舗コード</dt>
-                        <dd>{{ $store->code }}</dd>
-                    </div>
-                </dl>
-
-                <label class="admin-store-form__field">
-                    <span>エリア</span>
-                    <input
-                        type="text"
-                        name="area"
-                        value="{{ old('area', $store->area) }}"
-                        maxlength="100"
-                        placeholder="未設定"
-                    >
-                </label>
-
-                @if ($canChangeStatus)
+            <section id="basic-information" class="admin-store-detail-section">
+                <h2>基本情報</h2>
+                <div class="admin-store-basic-fields">
                     <label class="admin-store-form__field">
-                        <span>有効・無効</span>
-                        <select name="status" required>
-                            <option
-                                value="active"
-                                @selected(old('status', $store->status) === 'active')
-                            >
-                                有効
-                            </option>
-                            <option
-                                value="inactive"
-                                @selected(old('status', $store->status) === 'inactive')
-                            >
-                                無効
-                            </option>
-                        </select>
+                        <span>店舗名</span>
+                        <input
+                            type="text"
+                            name="name"
+                            value="{{ old('name', $store->name) }}"
+                            maxlength="255"
+                            @error('name') aria-invalid="true" @enderror
+                            required
+                        >
+                        @error('name')
+                            <small class="admin-store-field-error">{{ $message }}</small>
+                        @enderror
                     </label>
-                @else
+
                     <dl class="admin-store-form__read-only">
                         <div>
-                            <dt>有効・無効</dt>
-                            <dd>{{ $store->status === 'active' ? '有効' : '無効' }}</dd>
+                            <dt>店舗コード</dt>
+                            <dd>{{ $store->code }}</dd>
                         </div>
                     </dl>
-                @endif
 
-                <p class="admin-store-form__notice">
-                    店舗コードは作成後に変更できません。無効にしても既存シフトと公開版は削除されません。
-                </p>
-
-                <div class="admin-store-form__actions">
-                    <button type="submit">基本情報を更新</button>
+                    <label class="admin-store-form__field">
+                        <span>エリア</span>
+                        <input
+                            type="text"
+                            name="area"
+                            value="{{ old('area', $store->area) }}"
+                            maxlength="100"
+                            placeholder="未設定"
+                            @error('area') aria-invalid="true" @enderror
+                        >
+                        @error('area')
+                            <small class="admin-store-field-error">{{ $message }}</small>
+                        @enderror
+                    </label>
                 </div>
-            </form>
-        </section>
+                <p class="admin-store-form__notice">
+                    店舗コードは作成後に変更できません。
+                </p>
+            </section>
 
-        <section id="staff-members" class="admin-store-detail-section">
-            <div class="admin-store-detail-section__heading">
-                <h2>所属スタッフ</h2>
-                <a
-                    class="admin-flat-button admin-store-staff-add-link"
-                    href="{{ route('admin.stores.edit', [
-                        'store' => $store->code,
-                        'staff_add' => 1,
-                    ]) }}#staff-members"
-                    aria-expanded="{{ $staffAddOpen ? 'true' : 'false' }}"
-                >
-                    スタッフを追加
-                </a>
-            </div>
-            <p>現在この店舗に所属しているスタッフを表示します。</p>
+            <section id="staff-members" class="admin-store-detail-section">
+                <div class="admin-store-detail-section__heading">
+                    <h2>所属スタッフ</h2>
+                    <button
+                        class="admin-flat-button"
+                        type="button"
+                        data-candidate-panel-toggle="staff"
+                        aria-expanded="false"
+                    >
+                        スタッフを追加
+                    </button>
+                </div>
+                <p>この店舗で勤務可能な、現在所属中のスタッフです。</p>
 
-            <div class="admin-store-member-table-scroll">
-                <table class="admin-store-member-table" data-store-member-table>
-                    <caption class="admin-visually-hidden">
-                        {{ $store->name }}の所属スタッフ
-                    </caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">氏名</th>
-                            <th scope="col">メールアドレス</th>
-                            <th scope="col">主所属</th>
-                            <th scope="col">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse ($store->staffMembers as $staff)
-                            @php
-                                $isPrimary = (int) $staff->primary_store_id
-                                    === (int) $store->id;
-                            @endphp
-                            <tr data-store-member-user-id="{{ $staff->id }}">
-                                <th scope="row">{{ $staff->name }}</th>
-                                <td>{{ $staff->email }}</td>
-                                <td>
-                                    @if ($isPrimary)
-                                        <span class="admin-store-primary-label">主所属</span>
-                                    @else
-                                        <span aria-label="主所属ではありません">―</span>
-                                    @endif
-                                </td>
-                                <td class="admin-store-member-table__action">
-                                    @if ($isPrimary)
+                @error('staff_user_ids')
+                    <p class="admin-store-field-error">{{ $message }}</p>
+                @enderror
+                @error('staff_user_ids.*')
+                    <p class="admin-store-field-error">{{ $message }}</p>
+                @enderror
+
+                <div class="admin-store-member-table-scroll">
+                    <table class="admin-store-member-table">
+                        <caption class="admin-visually-hidden">
+                            {{ $store->name }}の所属スタッフ
+                        </caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">氏名</th>
+                                <th scope="col">メールアドレス</th>
+                                <th scope="col">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody data-selected-users="staff">
+                            @foreach ($staffMembers as $staff)
+                                <tr data-selected-user data-user-id="{{ $staff->id }}">
+                                    <th scope="row">
+                                        {{ $staff->name }}
+                                        <input
+                                            type="hidden"
+                                            name="staff_user_ids[]"
+                                            value="{{ $staff->id }}"
+                                        >
+                                    </th>
+                                    <td>{{ $staff->email }}</td>
+                                    <td class="admin-store-member-table__action">
                                         <button
                                             class="admin-flat-button"
                                             type="button"
-                                            disabled
+                                            data-remove-selected-user
                                         >
-                                            解除不可
+                                            所属解除
                                         </button>
-                                        <small>主所属変更後に解除できます</small>
-                                    @else
-                                        <form
-                                            method="POST"
-                                            action="{{ route(
-                                                'admin.stores.staff.destroy',
-                                                [
-                                                    'store' => $store->code,
-                                                    'staff' => $staff->id,
-                                                ]
-                                            ) }}"
-                                        >
-                                            @csrf
-                                            @method('DELETE')
-                                            <button class="admin-flat-button" type="submit">
-                                                所属解除
-                                            </button>
-                                        </form>
-                                    @endif
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td class="admin-store-member-table__empty" colspan="4">
+                                    </td>
+                                </tr>
+                            @endforeach
+                            <tr
+                                data-empty-selected-users="staff"
+                                @if ($staffMembers->isNotEmpty()) hidden @endif
+                            >
+                                <td class="admin-store-member-table__empty" colspan="3">
                                     現在所属しているスタッフはいません。
                                 </td>
                             </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+                        </tbody>
+                    </table>
+                </div>
 
-            <p class="admin-store-form__notice">
-                所属解除後も既存の下書き・公開シフトは保持されます。
-            </p>
-
-            @if ($staffAddOpen)
-                <section class="admin-store-staff-search" aria-labelledby="staff-search-title">
-                    <div class="admin-store-staff-search__heading">
-                        <h3 id="staff-search-title">未所属スタッフを検索</h3>
-                        <a
-                            href="{{ route('admin.stores.edit', [
-                                'store' => $store->code,
-                            ]) }}#staff-members"
-                        >
-                            閉じる
-                        </a>
-                    </div>
-
-                    <form
-                        class="admin-store-staff-search__form"
-                        method="GET"
-                        action="{{ route('admin.stores.edit', [
-                            'store' => $store->code,
-                        ]) }}"
-                    >
-                        <input type="hidden" name="staff_add" value="1">
+                <div
+                    class="admin-store-candidate-panel"
+                    data-candidate-panel="staff"
+                    hidden
+                >
+                    <div class="admin-store-candidate-search">
                         <label>
-                            <span>氏名・メールアドレス</span>
+                            <span>未所属スタッフを氏名・メールで検索</span>
                             <input
                                 type="search"
-                                name="staff_query"
-                                value="{{ $staffQuery }}"
                                 maxlength="100"
-                                required
+                                autocomplete="off"
+                                data-candidate-query
                             >
                         </label>
-                        <button class="admin-flat-button" type="submit">検索</button>
-                    </form>
-
-                    @if ($staffQuery !== '')
-                        <div class="admin-store-member-table-scroll">
-                            <table
-                                class="admin-store-member-table admin-store-member-table--search"
-                                data-store-staff-search-results
-                            >
-                                <caption class="admin-visually-hidden">
-                                    未所属スタッフの検索結果
-                                </caption>
-                                <thead>
-                                    <tr>
-                                        <th scope="col">氏名</th>
-                                        <th scope="col">メールアドレス</th>
-                                        <th scope="col">操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse ($staffSearchResults as $staff)
-                                        <tr data-staff-search-user-id="{{ $staff->id }}">
-                                            <th scope="row">{{ $staff->name }}</th>
-                                            <td>{{ $staff->email }}</td>
-                                            <td class="admin-store-member-table__action">
-                                                <form
-                                                    method="POST"
-                                                    action="{{ route(
-                                                        'admin.stores.staff.store',
-                                                        ['store' => $store->code]
-                                                    ) }}"
-                                                >
-                                                    @csrf
-                                                    <input
-                                                        type="hidden"
-                                                        name="staff_user_id"
-                                                        value="{{ $staff->id }}"
-                                                    >
-                                                    <button
-                                                        class="admin-flat-button"
-                                                        type="submit"
-                                                    >
-                                                        追加
-                                                    </button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td
-                                                class="admin-store-member-table__empty"
-                                                colspan="3"
-                                            >
-                                                条件に一致する未所属スタッフはいません。
-                                            </td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    @else
-                        <p class="admin-store-staff-search__guide">
-                            氏名またはメールアドレスを入力して検索してください。
-                        </p>
-                    @endif
-                </section>
-            @endif
-        </section>
-
-        <section id="shift-managers" class="admin-store-detail-section">
-            <h2>担当シフト管理者</h2>
-            <p>1店舗へ複数のシフト管理者を割り当てられます。</p>
-
-            @if ($canManageManagers)
-                <form
-                    class="admin-store-form admin-store-form--wide"
-                    method="POST"
-                    action="{{ route('admin.stores.managers.update', [
-                        'store' => $store->code,
-                    ]) }}"
-                >
-                    @csrf
-                    @method('PATCH')
-
-                    @php
-                        $selectedManagerIds = collect(
-                            old('manager_user_ids', $activeManagerIds->all())
-                        )->map(fn ($id) => (int) $id);
-                    @endphp
-
-                    <div class="admin-store-choice-grid">
-                        @forelse ($managerCandidates as $manager)
-                            <label class="admin-store-choice">
-                                <input
-                                    type="checkbox"
-                                    name="manager_user_ids[]"
-                                    value="{{ $manager->id }}"
-                                    @checked($selectedManagerIds->contains((int) $manager->id))
-                                >
-                                <span>
-                                    <strong>{{ $manager->name }}</strong>
-                                    <small>{{ $manager->email }}</small>
-                                </span>
-                            </label>
-                        @empty
-                            <p>割り当て可能なシフト管理者はいません。</p>
-                        @endforelse
+                        <button
+                            class="admin-flat-button"
+                            type="button"
+                            data-candidate-search
+                        >
+                            検索
+                        </button>
                     </div>
-
-                    <div class="admin-store-form__actions">
-                        <button type="submit">担当管理者を更新</button>
-                    </div>
-                </form>
-            @else
-                @php
-                    $readOnlyManagers = $managerCandidates->whereIn(
-                        'id',
-                        $activeManagerIds
-                    );
-                @endphp
-                <div class="admin-store-read-only-list">
-                    @forelse ($readOnlyManagers as $manager)
-                        <span>{{ $manager->name }}</span>
-                    @empty
-                        <span>未設定</span>
-                    @endforelse
+                    <p class="admin-store-candidate-message" data-candidate-message>
+                        検索語を入力してください。
+                    </p>
+                    <div class="admin-store-candidate-results" data-candidate-results></div>
                 </div>
-                <p class="admin-store-form__notice">
-                    担当管理者を変更できるのはシステム管理者だけです。
-                </p>
-            @endif
-        </section>
 
-        <section id="shift-patterns" class="admin-store-detail-section">
-            <h2>使用シフトパターン</h2>
-            <p>勤務時間数は既存値を維持し、開始・終了時刻から自動計算しません。</p>
-            <form
-                class="admin-store-form admin-store-form--table"
-                method="POST"
-                action="{{ route('admin.stores.patterns.update', [
-                    'store' => $store->code,
-                ]) }}"
-            >
-                @csrf
-                @method('PATCH')
+                <p class="admin-store-form__notice">
+                    所属解除後も既存の下書き・公開シフトは保持されます。
+                </p>
+            </section>
+
+            <section id="shift-managers" class="admin-store-detail-section">
+                <div class="admin-store-detail-section__heading">
+                    <h2>担当シフト管理者</h2>
+                    @if ($canManageManagers)
+                        <button
+                            class="admin-flat-button"
+                            type="button"
+                            data-candidate-panel-toggle="manager"
+                            aria-expanded="false"
+                        >
+                            管理者を追加
+                        </button>
+                    @endif
+                </div>
+                <p>複数のシフト管理者を担当として登録できます。</p>
+
+                @error('manager_user_ids')
+                    <p class="admin-store-field-error">{{ $message }}</p>
+                @enderror
+                @error('manager_user_ids.*')
+                    <p class="admin-store-field-error">{{ $message }}</p>
+                @enderror
+
+                <div class="admin-store-member-table-scroll">
+                    <table class="admin-store-member-table">
+                        <caption class="admin-visually-hidden">
+                            {{ $store->name }}の担当シフト管理者
+                        </caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">氏名</th>
+                                <th scope="col">メールアドレス</th>
+                                <th scope="col">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody data-selected-users="manager">
+                            @foreach ($shiftManagers as $manager)
+                                <tr data-selected-user data-user-id="{{ $manager->id }}">
+                                    <th scope="row">
+                                        {{ $manager->name }}
+                                        @if ($canManageManagers)
+                                            <input
+                                                type="hidden"
+                                                name="manager_user_ids[]"
+                                                value="{{ $manager->id }}"
+                                            >
+                                        @endif
+                                    </th>
+                                    <td>{{ $manager->email }}</td>
+                                    <td class="admin-store-member-table__action">
+                                        @if ($canManageManagers)
+                                            <button
+                                                class="admin-flat-button"
+                                                type="button"
+                                                data-remove-selected-user
+                                            >
+                                                担当解除
+                                            </button>
+                                        @else
+                                            変更不可
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                            <tr
+                                data-empty-selected-users="manager"
+                                @if ($shiftManagers->isNotEmpty()) hidden @endif
+                            >
+                                <td class="admin-store-member-table__empty" colspan="3">
+                                    担当シフト管理者は未設定です。
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                @if ($canManageManagers)
+                    <div
+                        class="admin-store-candidate-panel"
+                        data-candidate-panel="manager"
+                        hidden
+                    >
+                        <div class="admin-store-candidate-search">
+                            <label>
+                                <span>未担当管理者を氏名・メールで検索</span>
+                                <input
+                                    type="search"
+                                    maxlength="100"
+                                    autocomplete="off"
+                                    data-candidate-query
+                                >
+                            </label>
+                            <button
+                                class="admin-flat-button"
+                                type="button"
+                                data-candidate-search
+                            >
+                                検索
+                            </button>
+                        </div>
+                        <p class="admin-store-candidate-message" data-candidate-message>
+                            検索語を入力してください。
+                        </p>
+                        <div class="admin-store-candidate-results" data-candidate-results></div>
+                    </div>
+                @else
+                    <p class="admin-store-form__notice">
+                        担当管理者を変更できるのはシステム管理者だけです。
+                    </p>
+                @endif
+            </section>
+
+            <section id="shift-patterns" class="admin-store-detail-section">
+                <div class="admin-store-detail-section__heading">
+                    <h2>使用シフトパターン</h2>
+                    <button
+                        class="admin-flat-button"
+                        type="button"
+                        data-add-pattern
+                    >
+                        パターンを追加
+                    </button>
+                </div>
+                <p>
+                    勤務時間は時刻とは独立した小数値です。開始・終了時刻から計算しません。
+                </p>
+
+                @error('patterns')
+                    <p class="admin-store-field-error">{{ $message }}</p>
+                @enderror
 
                 <div class="admin-store-settings-scroll">
                     <table class="admin-store-settings-table">
                         <thead>
                             <tr>
-                                <th scope="col">コード</th>
+                                <th scope="col">パターンコード</th>
                                 <th scope="col">開始時刻</th>
                                 <th scope="col">終了時刻</th>
-                                <th scope="col">翌日終了</th>
-                                <th scope="col">表示順</th>
-                                <th scope="col">使用</th>
+                                <th scope="col">勤務時間</th>
+                                <th scope="col">操作</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            @foreach ($store->shiftPatterns as $index => $pattern)
-                                <tr>
+                        <tbody data-pattern-rows>
+                            @foreach ($patternRows as $index => $pattern)
+                                <tr data-pattern-row>
                                     <td>
-                                        <input
-                                            type="hidden"
-                                            name="patterns[{{ $index }}][id]"
-                                            value="{{ $pattern->id }}"
-                                        >
+                                        @if (! empty($pattern['id']))
+                                            <input
+                                                type="hidden"
+                                                name="patterns[{{ $index }}][id]"
+                                                value="{{ $pattern['id'] }}"
+                                                data-pattern-field="id"
+                                            >
+                                        @endif
                                         <input
                                             type="text"
                                             name="patterns[{{ $index }}][code]"
-                                            value="{{ old("patterns.$index.code", $pattern->code) }}"
+                                            value="{{ $pattern['code'] ?? '' }}"
                                             maxlength="20"
+                                            data-pattern-field="code"
+                                            @error("patterns.$index.code") aria-invalid="true" @enderror
                                             required
                                         >
                                     </td>
@@ -412,167 +417,68 @@
                                         <input
                                             type="time"
                                             name="patterns[{{ $index }}][start_time]"
-                                            value="{{ old(
-                                                "patterns.$index.start_time",
-                                                $pattern->start_time
-                                                    ? substr((string) $pattern->start_time, 0, 5)
-                                                    : null
-                                            ) }}"
+                                            value="{{ $pattern['start_time'] ?? '' }}"
+                                            data-pattern-field="start_time"
+                                            @error("patterns.$index.start_time") aria-invalid="true" @enderror
                                         >
                                     </td>
                                     <td>
                                         <input
                                             type="time"
                                             name="patterns[{{ $index }}][end_time]"
-                                            value="{{ old(
-                                                "patterns.$index.end_time",
-                                                $pattern->end_time
-                                                    ? substr((string) $pattern->end_time, 0, 5)
-                                                    : null
-                                            ) }}"
-                                        >
-                                    </td>
-                                    <td>
-                                        <input
-                                            type="hidden"
-                                            name="patterns[{{ $index }}][ends_next_day]"
-                                            value="0"
-                                        >
-                                        <input
-                                            type="checkbox"
-                                            name="patterns[{{ $index }}][ends_next_day]"
-                                            value="1"
-                                            @checked((bool) old(
-                                                "patterns.$index.ends_next_day",
-                                                $pattern->end_day_offset === 1
-                                            ))
+                                            value="{{ $pattern['end_time'] ?? '' }}"
+                                            data-pattern-field="end_time"
+                                            @error("patterns.$index.end_time") aria-invalid="true" @enderror
                                         >
                                     </td>
                                     <td>
                                         <input
                                             type="number"
-                                            name="patterns[{{ $index }}][display_order]"
-                                            value="{{ old(
-                                                "patterns.$index.display_order",
-                                                $pattern->display_order
-                                            ) }}"
+                                            name="patterns[{{ $index }}][work_hours]"
+                                            value="{{ $pattern['work_hours'] ?? '' }}"
                                             min="0"
-                                            step="1"
+                                            max="9999.99"
+                                            step="0.01"
+                                            inputmode="decimal"
+                                            data-pattern-field="work_hours"
+                                            @error("patterns.$index.work_hours") aria-invalid="true" @enderror
                                             required
                                         >
                                     </td>
                                     <td>
-                                        <input
-                                            type="hidden"
-                                            name="patterns[{{ $index }}][is_active]"
-                                            value="0"
+                                        <button
+                                            class="admin-flat-button"
+                                            type="button"
+                                            data-remove-pattern
                                         >
-                                        <input
-                                            type="checkbox"
-                                            name="patterns[{{ $index }}][is_active]"
-                                            value="1"
-                                            @checked((bool) old(
-                                                "patterns.$index.is_active",
-                                                $pattern->is_active
-                                            ))
-                                        >
+                                            使用解除
+                                        </button>
                                     </td>
                                 </tr>
                             @endforeach
-
-                            @php
-                                $newPatternIndex = $store->shiftPatterns->count();
-                            @endphp
-                            <tr class="admin-store-settings-table__new-row">
-                                <td>
-                                    <input
-                                        type="text"
-                                        name="patterns[{{ $newPatternIndex }}][code]"
-                                        value="{{ old("patterns.$newPatternIndex.code") }}"
-                                        maxlength="20"
-                                        placeholder="新規コード"
-                                    >
-                                </td>
-                                <td>
-                                    <input
-                                        type="time"
-                                        name="patterns[{{ $newPatternIndex }}][start_time]"
-                                        value="{{ old("patterns.$newPatternIndex.start_time") }}"
-                                    >
-                                </td>
-                                <td>
-                                    <input
-                                        type="time"
-                                        name="patterns[{{ $newPatternIndex }}][end_time]"
-                                        value="{{ old("patterns.$newPatternIndex.end_time") }}"
-                                    >
-                                </td>
-                                <td>
-                                    <input
-                                        type="hidden"
-                                        name="patterns[{{ $newPatternIndex }}][ends_next_day]"
-                                        value="0"
-                                    >
-                                    <input
-                                        type="checkbox"
-                                        name="patterns[{{ $newPatternIndex }}][ends_next_day]"
-                                        value="1"
-                                        @checked((bool) old(
-                                            "patterns.$newPatternIndex.ends_next_day",
-                                            false
-                                        ))
-                                    >
-                                </td>
-                                <td>
-                                    <input
-                                        type="number"
-                                        name="patterns[{{ $newPatternIndex }}][display_order]"
-                                        value="{{ old("patterns.$newPatternIndex.display_order", 0) }}"
-                                        min="0"
-                                        step="1"
-                                    >
-                                </td>
-                                <td>
-                                    <input
-                                        type="hidden"
-                                        name="patterns[{{ $newPatternIndex }}][is_active]"
-                                        value="0"
-                                    >
-                                    <input
-                                        type="checkbox"
-                                        name="patterns[{{ $newPatternIndex }}][is_active]"
-                                        value="1"
-                                        @checked((bool) old(
-                                            "patterns.$newPatternIndex.is_active",
-                                            false
-                                        ))
-                                    >
+                            <tr
+                                data-empty-patterns
+                                @if ($patternRows !== []) hidden @endif
+                            >
+                                <td class="admin-store-member-table__empty" colspan="5">
+                                    使用中のシフトパターンはありません。
                                 </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
+                <p class="admin-store-form__notice">
+                    使用解除しても既存シフト内の勤務時間スナップショットは変更されません。
+                </p>
+            </section>
 
-                <div class="admin-store-form__actions">
-                    <button type="submit">シフトパターンを更新</button>
-                </div>
-            </form>
-        </section>
-
-        <section id="staffing-settings" class="admin-store-detail-section">
-            <h2>人数配置判定</h2>
-            <form
-                class="admin-store-form admin-store-form--table"
-                method="POST"
-                action="{{ route('admin.stores.staffing.update', [
-                    'store' => $store->code,
-                ]) }}"
+            <section
+                id="staffing-settings"
+                class="admin-store-detail-section"
                 data-staffing-settings
             >
-                @csrf
-                @method('PATCH')
-
-                <label class="admin-store-form__field">
+                <h2>人数配置判定</h2>
+                <label class="admin-store-form__field admin-store-form__field--compact">
                     <span>判定方式</span>
                     <select name="staffing_check_mode" data-staffing-mode required>
                         @foreach ([
@@ -580,13 +486,7 @@
                             'fixed_total' => '固定人数チェック',
                             'pattern_combinations' => '勤務パターン組合せチェック',
                         ] as $value => $label)
-                            <option
-                                value="{{ $value }}"
-                                @selected(
-                                    old('staffing_check_mode', $store->staffing_check_mode)
-                                        === $value
-                                )
-                            >
+                            <option value="{{ $value }}" @selected($staffingMode === $value)>
                                 {{ $label }}
                             </option>
                         @endforeach
@@ -594,20 +494,15 @@
                 </label>
 
                 <label
-                    class="admin-store-form__field"
+                    class="admin-store-form__field admin-store-form__field--compact"
                     data-fixed-staffing
-                    @if (old('staffing_check_mode', $store->staffing_check_mode) !== 'fixed_total')
-                        hidden
-                    @endif
+                    @if ($staffingMode !== 'fixed_total') hidden @endif
                 >
                     <span>固定必要人数</span>
                     <input
                         type="number"
                         name="required_staff_count"
-                        value="{{ old(
-                            'required_staff_count',
-                            $store->required_staff_count
-                        ) }}"
+                        value="{{ old('required_staff_count', $store->required_staff_count) }}"
                         min="0"
                         step="1"
                     >
@@ -616,84 +511,63 @@
                 <div
                     class="admin-store-pattern-staffing"
                     data-pattern-staffing
-                    @if (
-                        old('staffing_check_mode', $store->staffing_check_mode)
-                            !== 'pattern_combinations'
-                    )
-                        hidden
-                    @endif
+                    @if ($staffingMode !== 'pattern_combinations') hidden @endif
                 >
                     <h3>全日共通の勤務パターン組合せ</h3>
                     <p>
                         各行が選択肢（OR条件）、同じ行内の複数パターンがAND条件です。
-                        空欄のパターンは条件に含めません。
                     </p>
-
-                    @php
-                        $staffingOptions = $staffingRequirement?->options ?? collect();
-                    @endphp
-
                     <div class="admin-store-settings-scroll">
                         <table class="admin-store-settings-table admin-store-staffing-table">
                             <thead>
                                 <tr>
                                     <th scope="col">選択肢コード</th>
                                     <th scope="col">表示順</th>
-                                    @foreach ($store->shiftPatterns as $pattern)
-                                        <th scope="col">{{ $pattern->code }} 必要数</th>
+                                    @foreach ($shiftPatterns as $pattern)
+                                        <th
+                                            scope="col"
+                                            data-staffing-pattern-column="{{ $pattern->id }}"
+                                        >
+                                            {{ $pattern->code }} 必要数
+                                        </th>
                                     @endforeach
                                     <th scope="col">削除</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach ($staffingOptions as $optionIndex => $option)
+                                @foreach ($staffingRows as $optionIndex => $option)
                                     <tr>
                                         <td>
-                                            <input
-                                                type="hidden"
-                                                name="staffing_options[{{ $optionIndex }}][id]"
-                                                value="{{ $option->id }}"
-                                            >
+                                            @if (! empty($option['id']))
+                                                <input
+                                                    type="hidden"
+                                                    name="staffing_options[{{ $optionIndex }}][id]"
+                                                    value="{{ $option['id'] }}"
+                                                >
+                                            @endif
                                             <input
                                                 type="text"
                                                 name="staffing_options[{{ $optionIndex }}][code]"
-                                                value="{{ old(
-                                                    "staffing_options.$optionIndex.code",
-                                                    $option->code
-                                                ) }}"
+                                                value="{{ $option['code'] ?? '' }}"
                                                 maxlength="50"
-                                                required
+                                                placeholder="選択肢コード"
                                             >
                                         </td>
                                         <td>
                                             <input
                                                 type="number"
                                                 name="staffing_options[{{ $optionIndex }}][display_order]"
-                                                value="{{ old(
-                                                    "staffing_options.$optionIndex.display_order",
-                                                    $option->display_order
-                                                ) }}"
+                                                value="{{ $option['display_order'] ?? $optionIndex + 1 }}"
                                                 min="0"
                                                 step="1"
-                                                required
                                             >
                                         </td>
-                                        @foreach ($store->shiftPatterns as $pattern)
-                                            @php
-                                                $optionPattern = $option->patterns
-                                                    ->firstWhere(
-                                                        'store_shift_pattern_id',
-                                                        $pattern->id
-                                                    );
-                                            @endphp
-                                            <td>
+                                        @foreach ($shiftPatterns as $pattern)
+                                            <td data-staffing-pattern-column="{{ $pattern->id }}">
                                                 <input
                                                     type="number"
                                                     name="staffing_options[{{ $optionIndex }}][pattern_counts][{{ $pattern->id }}]"
-                                                    value="{{ old(
-                                                        "staffing_options.$optionIndex.pattern_counts.$pattern->id",
-                                                        $optionPattern?->required_count
-                                                    ) }}"
+                                                    value="{{ $option['pattern_counts'][$pattern->id] ?? '' }}"
                                                     min="0"
                                                     step="1"
                                                 >
@@ -705,68 +579,20 @@
                                                 name="staffing_options[{{ $optionIndex }}][remove]"
                                                 value="0"
                                             >
-                                            <input
-                                                type="checkbox"
-                                                name="staffing_options[{{ $optionIndex }}][remove]"
-                                                value="1"
-                                                @checked((bool) old(
-                                                    "staffing_options.$optionIndex.remove",
-                                                    false
-                                                ))
-                                            >
+                                            @if (! empty($option['id']))
+                                                <input
+                                                    type="checkbox"
+                                                    name="staffing_options[{{ $optionIndex }}][remove]"
+                                                    value="1"
+                                                    @checked((bool) ($option['remove'] ?? false))
+                                                    aria-label="{{ $option['code'] ?? '選択肢' }}を削除"
+                                                >
+                                            @else
+                                                —
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforeach
-
-                                @php
-                                    $newOptionIndex = $staffingOptions->count();
-                                @endphp
-                                <tr class="admin-store-settings-table__new-row">
-                                    <td>
-                                        <input
-                                            type="text"
-                                            name="staffing_options[{{ $newOptionIndex }}][code]"
-                                            value="{{ old(
-                                                "staffing_options.$newOptionIndex.code"
-                                            ) }}"
-                                            maxlength="50"
-                                            placeholder="新規選択肢"
-                                        >
-                                    </td>
-                                    <td>
-                                        <input
-                                            type="number"
-                                            name="staffing_options[{{ $newOptionIndex }}][display_order]"
-                                            value="{{ old(
-                                                "staffing_options.$newOptionIndex.display_order",
-                                                0
-                                            ) }}"
-                                            min="0"
-                                            step="1"
-                                        >
-                                    </td>
-                                    @foreach ($store->shiftPatterns as $pattern)
-                                        <td>
-                                            <input
-                                                type="number"
-                                                name="staffing_options[{{ $newOptionIndex }}][pattern_counts][{{ $pattern->id }}]"
-                                                value="{{ old(
-                                                    "staffing_options.$newOptionIndex.pattern_counts.$pattern->id"
-                                                ) }}"
-                                                min="0"
-                                                step="1"
-                                            >
-                                        </td>
-                                    @endforeach
-                                    <td>
-                                        <input
-                                            type="hidden"
-                                            name="staffing_options[{{ $newOptionIndex }}][remove]"
-                                            value="0"
-                                        >
-                                        —
-                                    </td>
-                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -775,12 +601,73 @@
                 <p class="admin-store-form__notice">
                     設定変更は既存の下書きシフトと公開版を直接変更しません。
                 </p>
+            </section>
 
-                <div class="admin-store-form__actions">
-                    <button type="submit">人数配置判定を更新</button>
-                </div>
-            </form>
-        </section>
+            <div class="admin-store-save-bar">
+                <p data-store-save-status aria-live="polite">
+                    変更はありません
+                </p>
+                <button type="submit" data-store-save-button disabled>
+                    保存
+                </button>
+            </div>
+        </form>
+
+        <template data-user-row-template>
+            <tr data-selected-user>
+                <th scope="row">
+                    <span data-user-name></span>
+                    <input type="hidden" data-user-id-input>
+                </th>
+                <td data-user-email></td>
+                <td class="admin-store-member-table__action">
+                    <button
+                        class="admin-flat-button"
+                        type="button"
+                        data-remove-selected-user
+                    ></button>
+                </td>
+            </tr>
+        </template>
+
+        <template data-pattern-row-template>
+            <tr data-pattern-row>
+                <td>
+                    <input
+                        type="text"
+                        maxlength="20"
+                        data-pattern-field="code"
+                        required
+                    >
+                </td>
+                <td>
+                    <input type="time" data-pattern-field="start_time">
+                </td>
+                <td>
+                    <input type="time" data-pattern-field="end_time">
+                </td>
+                <td>
+                    <input
+                        type="number"
+                        min="0"
+                        max="9999.99"
+                        step="0.01"
+                        inputmode="decimal"
+                        data-pattern-field="work_hours"
+                        required
+                    >
+                </td>
+                <td>
+                    <button
+                        class="admin-flat-button"
+                        type="button"
+                        data-remove-pattern
+                    >
+                        使用解除
+                    </button>
+                </td>
+            </tr>
+        </template>
     </section>
 @endsection
 

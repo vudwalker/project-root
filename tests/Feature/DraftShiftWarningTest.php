@@ -546,7 +546,7 @@ class DraftShiftWarningTest extends TestCase
             'sequence' => $sequence,
             'entry_uuid' => (string) Str::uuid(),
             'pattern_code' => $pattern->code,
-            'work_minutes' => $pattern->work_minutes,
+            'work_hours' => $pattern->work_hours,
             'created_by' => $user->getKey(),
             'updated_by' => $user->getKey(),
         ]);
@@ -570,7 +570,6 @@ class DraftShiftWarningTest extends TestCase
     ): User {
         $user = User::query()->create([
             'organization_id' => $this->store->organization_id,
-            'primary_store_id' => $attachToStore ? $this->store->getKey() : null,
             'name' => $email,
             'email' => $email,
             'password' => 'not-used-for-login',

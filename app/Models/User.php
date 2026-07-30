@@ -16,7 +16,6 @@ use Illuminate\Notifications\Notifiable;
 
 #[Fillable([
     'organization_id',
-    'primary_store_id',
     'name',
     'email',
     'password',
@@ -31,11 +30,6 @@ class User extends Authenticatable
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
-    }
-
-    public function primaryStore(): BelongsTo
-    {
-        return $this->belongsTo(Store::class, 'primary_store_id');
     }
 
     public function roles(): BelongsToMany

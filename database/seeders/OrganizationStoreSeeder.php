@@ -34,7 +34,6 @@ class OrganizationStoreSeeder extends Seeder
                 ],
                 [
                     'name' => $attributes['name'],
-                    'status' => 'active',
                     'display_order' => $attributes['order'],
                     'staffing_check_mode' => 'disabled',
                     'required_staff_count' => null,

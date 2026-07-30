@@ -285,7 +285,6 @@ class AuthenticationFlowTest extends TestCase
             'organization_id' => $organization->getKey(),
             'code' => 'foreign-store',
             'name' => '別組織店舗',
-            'status' => 'active',
             'display_order' => 1,
             'staffing_check_mode' => 'disabled',
         ]);
@@ -348,8 +347,6 @@ class AuthenticationFlowTest extends TestCase
         $this->assertSame(['shift_manager'], $this->roleCodes('manager-only@example.com'));
         $this->assertSame(['shift_manager'], $this->roleCodes('manager@example.com'));
         $this->assertSame(['system_admin'], $this->roleCodes('admin@example.com'));
-        $this->assertNull($this->user('manager@example.com')->primary_store_id);
-        $this->assertNull($this->user('admin@example.com')->primary_store_id);
         $this->assertFalse($this->user('manager@example.com')->stores()->exists());
         $this->assertFalse($this->user('admin@example.com')->stores()->exists());
         $this->assertSame('retired', $this->user('inactive@example.com')->status);

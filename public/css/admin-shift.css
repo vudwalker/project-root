@@ -892,25 +892,6 @@ body.admin-shift-page {
     text-align: center !important;
 }
 
-.admin-store-status {
-    display: inline-block;
-    min-width: 40px;
-    padding: 2px 5px;
-    border: 1px solid #777777;
-    text-align: center;
-}
-
-.admin-store-status.is-active {
-    border-color: var(--admin-check-color);
-    background: var(--admin-clear-panel-bg);
-    color: var(--admin-check-color);
-}
-
-.admin-store-status.is-inactive {
-    background: #eeeeee;
-    color: #555555;
-}
-
 .admin-store-form {
     width: min(620px, 100%);
     margin-top: 20px;
@@ -1138,6 +1119,10 @@ body.admin-shift-page {
     color: #244f78;
 }
 
+.admin-store-detail-form {
+    width: 100%;
+}
+
 .admin-store-detail-section {
     margin-top: 22px;
     scroll-margin-top: 12px;
@@ -1176,6 +1161,27 @@ body.admin-shift-page {
     margin: 7px 0 0;
     color: #555555;
     font-size: 12px;
+}
+
+.admin-store-basic-fields {
+    width: min(620px, 100%);
+    margin-top: 12px;
+}
+
+.admin-store-form__field--compact {
+    width: min(620px, 100%);
+    margin-top: 12px;
+}
+
+.admin-store-field-error {
+    color: var(--admin-warning-text) !important;
+    font-size: 11px;
+}
+
+.admin-store-form__field input[aria-invalid="true"],
+.admin-store-settings-table input[aria-invalid="true"] {
+    border-color: var(--admin-warning-border);
+    background: var(--admin-warning-panel-bg);
 }
 
 .admin-store-form--section {
@@ -1223,7 +1229,7 @@ body.admin-shift-page {
 }
 
 .admin-store-member-table__action {
-    width: 270px;
+    width: 120px;
     white-space: nowrap;
 }
 
@@ -1432,8 +1438,97 @@ body.admin-shift-page {
     font-size: 11px;
 }
 
-.admin-store-form [hidden] {
+.admin-store-form [hidden],
+.admin-store-detail-form [hidden] {
     display: none;
+}
+
+.admin-store-candidate-panel {
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px solid var(--admin-grid-border);
+}
+
+.admin-store-candidate-search {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.admin-store-candidate-search label {
+    display: grid;
+    gap: 3px;
+    width: min(430px, 100%);
+    color: #555555;
+    font-size: 11px;
+}
+
+.admin-store-candidate-search input {
+    width: 100%;
+    height: 29px;
+    padding: 3px 6px;
+    border: 1px solid #777777;
+    border-radius: 0;
+    background: #ffffff;
+    font: inherit;
+}
+
+.admin-store-candidate-message {
+    margin: 7px 0;
+    color: #666666;
+    font-size: 11px;
+}
+
+.admin-store-candidate-results {
+    width: min(720px, 100%);
+    border-top: 1px solid #aaaaaa;
+}
+
+.admin-store-candidate-result {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    min-height: 32px;
+    padding: 4px 7px;
+    border-bottom: 1px solid #aaaaaa;
+    background: #ffffff;
+    font-size: 12px;
+}
+
+.admin-store-save-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding: 9px 0;
+    border-top: 2px solid var(--admin-grid-border);
+    background: #f4f4f4;
+}
+
+.admin-store-save-bar p {
+    margin: 0;
+    color: #555555;
+    font-size: 12px;
+}
+
+.admin-store-save-bar button {
+    min-width: 96px;
+    height: 32px;
+    border: 1px solid #555555;
+    border-radius: 0;
+    background: #ffffff;
+    font: inherit;
+    cursor: pointer;
+}
+
+.admin-store-save-bar button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 
 @media (max-width: 900px) {
@@ -1447,16 +1542,14 @@ body.admin-shift-page {
         grid-template-columns: 1fr;
     }
 
-    .admin-store-choice-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .admin-store-staff-search__form {
+    .admin-store-staff-search__form,
+    .admin-store-candidate-search {
         align-items: stretch;
         flex-direction: column;
     }
 
-    .admin-store-staff-search__form .admin-flat-button {
+    .admin-store-staff-search__form .admin-flat-button,
+    .admin-store-candidate-search .admin-flat-button {
         width: fit-content;
     }
 }

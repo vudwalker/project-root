@@ -97,6 +97,7 @@ final class StoreShiftRequest extends FormRequest
             'sequence',
             'pattern_code',
             'work_minutes',
+            'work_hours',
             'created_by',
             'updated_by',
             'start_time',

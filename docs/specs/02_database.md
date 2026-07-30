@@ -190,7 +190,6 @@ Organization
 | code | varchar(100) | 不可 | 店舗識別コード |
 | name | varchar(255) | 不可 | 店舗名 |
 | area | varchar(100) | 可 | エリア名 |
-| status | varchar(30) | 不可 | 店舗状態 |
 | display_order | integer | 不可 | 店舗一覧の表示順 |
 | staffing_check_mode | varchar(30) | 不可 | 人数チェック方式 |
 | required_staff_count | integer | 可 | 固定必要人数 |
@@ -198,20 +197,7 @@ Organization
 | updated_at | timestamp | 不可 | 更新日時 |
 | deleted_at | timestamp | 可 | 論理削除日時 |
 
-`status`の想定値：
-
-- `active`
-- `inactive`
-
-`active`は有効、`inactive`は無効を表す。
-
-`suspended`、`closed`は現時点では使用しない。
-
-`inactive`へ変更しても、関連する`shift_schedules`、`shifts`、`published_shifts`は削除しない。
-
-`inactive`店舗では、新規シフト作成、シフト編集、配布を許可しない。
-
-システム管理者は`inactive`店舗とその過去データを閲覧できる。
+店舗は常に有効として扱い、店舗状態を表すカラムは持たない。
 
 `staffing_check_mode`の想定値：
 
@@ -223,7 +209,6 @@ Organization
 
 - `organization_id + code`を一意にする
 - `organization_id + area`に検索用インデックスを設定する
-- `status`は`active`または`inactive`だけを許可する
 - `display_order`の初期値は`0`
 - `organization_id`は`organizations.id`への外部キー
 - `required_staff_count`は0以上
@@ -300,7 +285,6 @@ Store
 |---|---|---:|---|
 | id | bigint | 不可 | 主キー |
 | organization_id | bigint | 不可 | 所属組織 |
-| primary_store_id | bigint | 可 | 主所属店舗 |
 | name | varchar(255) | 不可 | 氏名 |
 | email | varchar(255) | 不可 | ログイン用メールアドレス |
 | password | varchar(255) | 不可 | ハッシュ化パスワード |
@@ -322,11 +306,6 @@ Store
 - `email`をシステム全体で一意にする
 - ログイン時はメールアドレスだけでユーザーを特定する
 - `organization_id`は`organizations.id`への外部キー
-- `primary_store_id`は`stores.id`への外部キー
-- 主所属店舗は同一組織の店舗でなければならない
-- スタッフ権限を持つ有効なユーザーには、原則として主所属店舗を設定する
-- 主所属店舗は、そのユーザーの有効な所属店舗に含まれていなければならない
-- 主所属店舗の整合性はアプリケーション側でも検証する
 - Soft Deleteを使用する
 - 過去シフトがあるユーザーは物理削除しない
 
@@ -335,7 +314,6 @@ Store
 ```text
 User
 ├── belongsTo Organization
-├── belongsTo PrimaryStore
 ├── belongsToMany Roles
 ├── belongsToMany Stores through store_user
 ├── belongsToMany ManagedStores through store_shift_manager
@@ -382,11 +360,8 @@ User
 - 担当店舗のシフトを配布できる
 - 担当店舗情報とシフトパターンを追加・編集できる
 - 担当店舗の所属スタッフと人数配置設定を編集できる
-- 主所属店舗が担当店舗であるスタッフ情報を追加・編集できる
 - 担当外店舗は編集できない
-- 担当関係が有効であれば、`inactive`店舗の店舗情報と関連設定を編集できる
-- `inactive`店舗のシフト作成、編集、配布はできない
-- 店舗追加、店舗状態変更、シフト管理者の担当店舗割り当て変更はできない
+- 店舗追加とシフト管理者の担当店舗割り当て変更はできない
 - 管理者用・スタッフ別シフト確認画面では、選択した担当店舗へ有効な所属があるスタッフを閲覧できる
 - 重複勤務確認のため、そのスタッフの対象月における全店舗のシフトを閲覧できる
 - 担当外店舗のシフトは閲覧専用とする
@@ -394,10 +369,8 @@ User
 
 ### system_admin
 
-- 全ての`active`店舗を閲覧・編集できる
-- 全ての`active`店舗のシフトを配布できる
-- `inactive`店舗とその過去データを閲覧できる
-- `inactive`店舗では新規シフト作成、シフト編集、配布ができない
+- 同一組織の全店舗を閲覧・編集できる
+- 同一組織の全店舗のシフトを配布できる
 - 店舗追加と、店舗・スタッフ・権限・担当店舗を管理できる
 - ユーザー権限およびシフト管理者の担当店舗割り当てを変更できる
 
@@ -465,7 +438,8 @@ store_shift_manager
 - `store_id`は`stores.id`への外部キー
 - `user_id`は`users.id`への外部キー
 - `ended_on`は`started_on`以降とする
-- 主所属店舗は`users.primary_store_id`で管理する
+
+主所属の概念は使用しない。`store_user`を、そのスタッフが勤務可能な店舗を表す正本とする。
 
 店舗別シフト表のスタッフ行は、以下の順で並べる。
 
@@ -501,7 +475,6 @@ store_shift_manager
 - 1店舗へ複数の有効なシフト管理者を割り当て可能
 - `user_id`には`shift_manager`権限が必要
 - システム管理者は、このテーブルに登録されていなくても全店舗を管理可能
-- シフト操作は店舗状態の制限に従い、`inactive`店舗では過去データの閲覧だけを許可する
 - 担当店舗の割り当て変更はシステム管理者のみ可能
 
 権限判定：
@@ -509,11 +482,9 @@ store_shift_manager
 ```text
 system_admin
 → 全店舗を管理可能
-→ inactive店舗のシフトは過去データの閲覧だけが可能
 
 shift_manager
 → store_shift_managerで有効な担当店舗の店舗情報と関連設定を操作可能
-→ inactive店舗ではシフト作成、編集、配布不可
 
 staff
 → 管理画面の編集不可
@@ -534,7 +505,7 @@ staff
 | id | bigint | 不可 | 主キー |
 | store_id | bigint | 不可 | 店舗ID |
 | code | varchar(20) | 不可 | シフトコード |
-| work_minutes | integer | 不可 | 勤務時間数 |
+| work_hours | decimal(6,2) | 不可 | 業務上の勤務時間数 |
 | start_time | time | 可 | 勤務開始時刻 |
 | start_day_offset | smallint | 可 | 勤務基準日から開始日までの日数 |
 | end_time | time | 可 | 勤務終了時刻 |
@@ -558,7 +529,7 @@ staff
 制約：
 
 - `store_id + code`を一意にする
-- `work_minutes`は0以上
+- `work_hours`は0以上
 - `display_order`の初期値は`0`
 - `is_active`の初期値は`false`
 - 勤務時間帯の4項目はすべてNULL、またはすべて値ありとする
@@ -568,20 +539,21 @@ staff
 - Soft Deleteを使用する
 - 使用済みパターンは物理削除しない
 
-勤務時間数は分単位で保存する。
+勤務時間は小数値で保存する。
 
 例：
 
 ```text
-7時間30分
-→ 450
+11時間15分 → 11.25
+7時間30分 → 7.50
+6時間45分 → 6.75
 ```
 
-`研`は勤務時間が不定のため、初期値を0分とする。
+`研`は勤務時間が不定のため、初期値を`0.00`とする。
 
-`有`は運用ルールが確定するまで、初期値を0分とする。
+`有`は運用ルールが確定するまで、初期値を`0.00`とする。
 
-全店舗についてA、B、C、D、E、研、有のレコードをSeederで作成し、店舗ごとに`is_active`と`work_minutes`を設定する。
+全店舗についてA、B、C、D、E、研、有のレコードをSeederで作成し、店舗ごとに`is_active`と`work_hours`を設定する。
 
 同じCであっても、店舗ごとに別の勤務時間を設定できる。
 
@@ -606,8 +578,8 @@ staff
 - 岡山富田：C 1人
 - 西大寺：B 1人＋C 1人、またはD 1人
 
-勤務時間帯と`work_minutes`は別の値として扱い、勤務時間帯から
-既存の`work_minutes`を自動更新しない。
+開始・終了時刻と`work_hours`は独立した値として扱う。
+時刻から`work_hours`を算出せず、一致チェック、分への変換、丸め、自動補正も行わない。
 
 ### 11.2 store_staffing_requirements
 
@@ -773,7 +745,7 @@ DB上および下書き保存では許可するが、重複勤務として警告
 | sequence | smallint | 不可 | 同一セル内の表示順 |
 | entry_uuid | uuid | 不可 | 追加操作を一意に識別するUUID |
 | pattern_code | varchar(20) | 不可 | 保存時点のコード |
-| work_minutes | integer | 不可 | 保存時点の勤務時間数 |
+| work_hours | decimal(6,2) | 不可 | 保存時点の業務上の勤務時間数 |
 | created_by | bigint | 可 | 入力者 |
 | updated_by | bigint | 可 | 最終更新者 |
 | created_at | timestamp | 不可 | 作成日時 |
@@ -784,10 +756,11 @@ DB上および下書き保存では許可するが、重複勤務として警告
 - `shift_schedule_id + user_id + work_date + sequence`を一意にする
 - `entry_uuid`をシステム全体で一意にする
 - `sequence`は1以上
-- `work_minutes`は0以上
+- `work_hours`は0以上
 - `work_date`は`shift_schedule.target_month`と同じ月でなければならない
 - シフトパターンは対象店舗のパターンでなければならない
-- スタッフは対象店舗へ所属していなければならない
+- 新規シフトの通常候補と新しいスタッフ行は、対象店舗へ現在所属するスタッフに限る
+- 所属解除前から対象月に下書きがあるスタッフは、既存行を残してシフトを追加・変更・削除できる
 - 同日・同一店舗の複数シフトを許可する
 - 同一コードの複数シフトを許可する
 - 同日・異なる店舗への登録もDB上は許可する
@@ -820,9 +793,10 @@ DB上および下書き保存では許可するが、重複勤務として警告
 重複勤務があっても下書き保存は許可し、
 重複勤務が1件でも残っている場合は配布を許可しない。
 
-`pattern_code`と`work_minutes`には、シフト入力時点の店舗別シフトパターンを複写する。
+`pattern_code`と`work_hours`には、シフト入力時点の店舗別シフトパターンを複写する。
 
 後から店舗別シフトパターンを変更しても、既存シフトのコードや勤務時間を自動変更しない。
+開始・終了時刻から勤務時間を算出せず、分への変換、丸め、自動補正も行わない。
 
 同一セルへ新規シフトを追加する場合は、現在の最大`sequence`より後ろへ追加する。
 
@@ -840,7 +814,7 @@ DB上および下書き保存では許可するが、重複勤務として警告
 
 月間計は、保存済みの集計値ではなく、管理画面に表示する対象月・スタッフ単位の下書き`shifts`から以下を算出する。
 
-- 勤務時間：`work_minutes`の合計
+- 勤務時間：`work_hours`の合計
 - A〜E：`pattern_code`が各コードと一致するシフト件数
 - 総数：A〜E、研、有を含む全シフト件数
 
@@ -850,9 +824,9 @@ DB上および下書き保存では許可するが、重複勤務として警告
 
 スタッフ別管理画面では、画面に表示している全店舗の下書き`shifts`をスタッフ単位で集計する。
 
-勤務時間はDB上では`work_minutes`の合計として扱い、画面では累積時間の`HH:MM`形式で表示する。
+勤務時間はDB上の`work_hours`を小数のまま合計し、画面にも小数で表示する。
 
-24時間を超えても折り返さず、2250分は`37:30`と表示する。
+例：`11.25 + 7.50 = 18.75`
 
 月間計を別の原本データとして保存せず、`shifts`から算出する。
 
@@ -872,7 +846,7 @@ DB上および下書き保存では許可するが、重複勤務として警告
 | work_date | date | 不可 | 勤務日 |
 | sequence | smallint | 不可 | 同一セル内の表示順 |
 | pattern_code | varchar(20) | 不可 | 配布時点のコード |
-| work_minutes | integer | 不可 | 配布時点の勤務時間数 |
+| work_hours | decimal(6,2) | 不可 | 配布時点の業務上の勤務時間数 |
 | published_at | timestamp | 不可 | 配布日時 |
 | created_at | timestamp | 不可 | 作成日時 |
 | updated_at | timestamp | 不可 | 更新日時 |
@@ -881,15 +855,14 @@ DB上および下書き保存では許可するが、重複勤務として警告
 
 - `shift_schedule_id + user_id + work_date + sequence`を一意にする
 - 店舗別シフトパターンへの外部キーは持たない
-- 配布時点のコードと勤務時間数をスナップショットとして保持する
+- 配布時点のコードと`shifts.work_hours`をスナップショットとして保持する
 - 再配布時は、その`shift_schedule_id`の既存公開版を置き換える
 - 公開版の置換はトランザクション内で行う
 
 スタッフ用画面は`published_shifts`だけを参照し、下書きの`shifts`を直接参照しない。
 
-過去の`published_shifts`に対応する店舗が`inactive`へ変更されても、公開シフトは削除しない。
-
-スタッフの個人シフトでは、過去の公開シフトに含まれる`inactive`店舗名を表示してよい。
+スタッフの店舗所属を解除しても、既存の`published_shifts`は削除しない。
+公開版に含まれるスタッフ行は、所属解除後もその公開版の閲覧対象として保持する。
 
 未配布の月には、以下のような案内を表示する。
 
@@ -1066,14 +1039,12 @@ published_draft_version < draft_version
 - `organization_id`
 - `organization_id + code`
 - `organization_id + area`
-- `status`
 - `display_order`
 
 ### users
 
 - `organization_id`
 - `email`
-- `primary_store_id`
 - `status`
 
 ### role_user
@@ -1153,7 +1124,6 @@ Seederには以下を含める。
   - `system_admin`
 - ユーザーへの複数権限割り当て
 - スタッフの所属店舗
-- 主所属店舗
 - 店舗ごとのスタッフ表示順
 - シフト管理者の担当店舗
 - 店舗別シフトパターン
@@ -1269,7 +1239,7 @@ php artisan route:list
 - 組織が異なる場合も重複メールアドレスを登録できない
 - 一人のユーザーが複数権限を持てる
 - スタッフが複数店舗へ所属できる
-- 主所属店舗を設定できる
+- 主所属を持たず、勤務可能店舗を`store_user`だけで管理できる
 - 店舗ごとのスタッフ表示順を保持できる
 - シフト管理者が複数店舗を担当できる
 - シフト管理者が選択した担当店舗へ有効な所属があるスタッフを表示できる
@@ -1278,7 +1248,7 @@ php artisan route:list
 - シフト管理者がユーザー権限や担当店舗割り当てを変更できない
 - システム管理者だけがユーザー権限と担当店舗割り当てを変更できる
 - 担当外店舗の編集を拒否できる
-- システム管理者が全ての`active`店舗のシフトを編集できる
+- システム管理者が同一組織の全店舗のシフトを編集できる
 - 店舗ごとのシフトパターンを保持できる
 - 同じコードでも店舗ごとに勤務時間を変更できる
 - 店舗ごとのシフトパターンに勤務開始・終了時刻と日オフセットを保持できる
@@ -1313,10 +1283,9 @@ php artisan route:list
 - 配布時に下書きを検証し、公開版へ反映できる
 - 店舗別管理画面で選択店舗の下書きだけから月間計を算出できる
 - スタッフ別管理画面で表示対象となる全店舗の下書きから月間計を算出できる
-- 勤務時間を24時間で折り返さない`HH:MM`形式で表示できる
-- 2250分を`37:30`と表示できる
-- システム管理者が`inactive`店舗と過去データを閲覧できる
-- `inactive`店舗で新規シフト作成、編集、配布を拒否できる
-- `inactive`店舗へ変更しても過去の下書きと公開シフトを保持できる
+- 店舗パターンから`work_hours`を下書きへ複写できる
+- 配布時に`shifts.work_hours`を`published_shifts.work_hours`へ複写できる
+- 月間勤務時間を`work_hours`の小数合計で表示できる
+- 開始・終了時刻から勤務時間を算出・補正しない
 - 開発用Seederへ大安寺、野田、西大寺、岡山富田を登録できる
 - 既存スタッフ用画面のUIとスクロール動作が壊れていない

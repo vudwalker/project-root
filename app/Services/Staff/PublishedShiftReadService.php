@@ -8,6 +8,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
 
 final class PublishedShiftReadService
 {
@@ -62,7 +63,6 @@ final class PublishedShiftReadService
 
         return $user->stores()
             ->where('stores.organization_id', $user->organization_id)
-            ->where('stores.status', 'active')
             ->where('store_user.is_active', true)
             ->where(function (Builder $query) use ($today): void {
                 $query
@@ -83,7 +83,6 @@ final class PublishedShiftReadService
                 'stores.organization_id',
                 'stores.code',
                 'stores.name',
-                'stores.status',
                 'stores.display_order',
             ]);
     }
@@ -166,24 +165,24 @@ final class PublishedShiftReadService
         Store $store,
         CarbonImmutable $targetMonth,
     ): array {
-        $staffMembers = $this->currentStaffMembers($store);
-        $rows = $staffMembers->isEmpty()
-            ? collect()
-            : $this->publishedRows($targetMonth)
-                ->where('publication_schedules.store_id', $store->getKey())
-                ->whereIn('published_shifts.user_id', $staffMembers->modelKeys())
-                ->orderBy('published_shifts.user_id')
-                ->orderBy('published_shifts.work_date')
-                ->orderBy('published_shifts.sequence')
-                ->orderBy('published_shifts.id')
-                ->get([
-                    'published_shifts.id',
-                    'published_shifts.shift_schedule_id',
-                    'published_shifts.user_id',
-                    'published_shifts.work_date',
-                    'published_shifts.sequence',
-                    'published_shifts.pattern_code',
-                ]);
+        $rows = $this->publishedRows($targetMonth)
+            ->where('publication_schedules.store_id', $store->getKey())
+            ->orderBy('published_shifts.user_id')
+            ->orderBy('published_shifts.work_date')
+            ->orderBy('published_shifts.sequence')
+            ->orderBy('published_shifts.id')
+            ->get([
+                'published_shifts.id',
+                'published_shifts.shift_schedule_id',
+                'published_shifts.user_id',
+                'published_shifts.work_date',
+                'published_shifts.sequence',
+                'published_shifts.pattern_code',
+            ]);
+        $staffMembers = $this->staffMembersForPublishedRows(
+            $store,
+            $rows->pluck('user_id'),
+        );
         $rowsByUser = $rows->groupBy(
             fn (PublishedShift $row): int => (int) $row->user_id,
         );
@@ -261,6 +260,50 @@ final class PublishedShiftReadService
                 'users.name',
                 'users.status',
             ]);
+    }
+
+    /**
+     * 現在所属しているスタッフに加え、公開スナップショットに残るスタッフも表示します。
+     *
+     * @param  Collection<int, int|string>  $publishedUserIds
+     * @return EloquentCollection<int, User>
+     */
+    private function staffMembersForPublishedRows(
+        Store $store,
+        Collection $publishedUserIds,
+    ): EloquentCollection {
+        $currentMembers = $this->currentStaffMembers($store);
+        $currentUserIds = $currentMembers->modelKeys();
+        $publishedOnlyMembers = User::query()
+            ->where('organization_id', $store->organization_id)
+            ->whereKey($publishedUserIds)
+            ->when(
+                $currentUserIds !== [],
+                fn (Builder $query): Builder => $query->whereNotIn(
+                    'users.id',
+                    $currentUserIds,
+                ),
+            )
+            ->whereHas(
+                'roles',
+                fn (Builder $query): Builder => $query->where(
+                    'roles.code',
+                    'staff',
+                ),
+            )
+            ->orderBy('users.name')
+            ->orderBy('users.id')
+            ->get([
+                'users.id',
+                'users.organization_id',
+                'users.name',
+                'users.status',
+            ]);
+
+        return new EloquentCollection([
+            ...$currentMembers->all(),
+            ...$publishedOnlyMembers->all(),
+        ]);
     }
 
     /**

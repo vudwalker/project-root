@@ -48,12 +48,7 @@ final class StoreAdminStoreRequest extends FormRequest
                 ),
             ],
             'area' => ['bail', 'required', 'string', 'max:100'],
-            'status' => [
-                'bail',
-                'required',
-                'string',
-                Rule::in(['active', 'inactive']),
-            ],
+            'status' => ['prohibited'],
             'organization_id' => ['prohibited'],
             'display_order' => ['prohibited'],
             'staffing_check_mode' => ['prohibited'],

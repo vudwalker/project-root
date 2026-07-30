@@ -10,11 +10,11 @@ class ShiftPatternSeeder extends Seeder
 {
     public function run(): void
     {
-        $minutesByStore = [
-            'daianji' => ['A' => 480, 'B' => 420, 'C' => 450, 'D' => 240, 'E' => 300, '研' => 0, '有' => 0],
-            'noda' => ['A' => 480, 'B' => 420, 'C' => 390, 'D' => 240, 'E' => 300, '研' => 0, '有' => 0],
-            'saidaiji' => ['A' => 480, 'B' => 420, 'C' => 450, 'D' => 240, 'E' => 300, '研' => 0, '有' => 0],
-            'okayama-tomida' => ['A' => 480, 'B' => 420, 'C' => 450, 'D' => 240, 'E' => 300, '研' => 0, '有' => 0],
+        $hoursByStore = [
+            'daianji' => ['A' => '8.00', 'B' => '7.00', 'C' => '7.50', 'D' => '4.00', 'E' => '5.00', '研' => '0.00', '有' => '0.00'],
+            'noda' => ['A' => '8.00', 'B' => '7.00', 'C' => '6.50', 'D' => '4.00', 'E' => '5.00', '研' => '0.00', '有' => '0.00'],
+            'saidaiji' => ['A' => '8.00', 'B' => '7.00', 'C' => '7.50', 'D' => '4.00', 'E' => '5.00', '研' => '0.00', '有' => '0.00'],
+            'okayama-tomida' => ['A' => '8.00', 'B' => '7.00', 'C' => '7.50', 'D' => '4.00', 'E' => '5.00', '研' => '0.00', '有' => '0.00'],
         ];
         $timeWindowsByStore = [
             'daianji' => $this->fullTimeCWindows(),
@@ -25,13 +25,13 @@ class ShiftPatternSeeder extends Seeder
         $displayOrder = array_flip(['A', 'B', 'C', 'D', 'E', '研', '有']);
 
         Store::query()
-            ->whereIn('code', array_keys($minutesByStore))
+            ->whereIn('code', array_keys($hoursByStore))
             ->each(function (Store $store) use (
-                $minutesByStore,
+                $hoursByStore,
                 $displayOrder,
                 $timeWindowsByStore,
             ): void {
-                foreach ($minutesByStore[$store->code] as $code => $minutes) {
+                foreach ($hoursByStore[$store->code] as $code => $hours) {
                     $timeWindow = $timeWindowsByStore[$store->code][$code] ?? [];
 
                     StoreShiftPattern::query()->withTrashed()->updateOrCreate(
@@ -40,7 +40,7 @@ class ShiftPatternSeeder extends Seeder
                             'code' => $code,
                         ],
                         [
-                            'work_minutes' => $minutes,
+                            'work_hours' => $hours,
                             'start_time' => $timeWindow['start_time'] ?? null,
                             'start_day_offset' => $timeWindow['start_day_offset'] ?? null,
                             'end_time' => $timeWindow['end_time'] ?? null,

@@ -47,7 +47,7 @@
                         data-shift-mode="pattern"
                         data-shift-pattern-id="{{ $pattern['id'] }}"
                         data-shift-pattern-code="{{ $pattern['code'] }}"
-                        data-work-minutes="{{ $pattern['workMinutes'] }}"
+                        data-work-hours="{{ $pattern['workHours'] }}"
                         aria-pressed="false"
                         @disabled($screen['isReadOnly'])
                     >

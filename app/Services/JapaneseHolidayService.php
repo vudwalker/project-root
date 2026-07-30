@@ -55,7 +55,7 @@ class JapaneseHolidayService
             $date = trim((string) $row[0]);
 
             // ヘッダー行や不正な日付は安全に無視します。
-            if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
                 continue;
             }
 

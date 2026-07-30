@@ -38,7 +38,7 @@ final class AdminShiftWritePayloadFactory
             'shift_date' => $shift->work_date->toDateString(),
             'shift_pattern_id' => (int) $shift->store_shift_pattern_id,
             'pattern_code' => (string) $shift->pattern_code,
-            'work_minutes' => (int) $shift->work_minutes,
+            'work_hours' => (string) $shift->work_hours,
         ];
     }
 

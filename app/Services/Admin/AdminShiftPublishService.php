@@ -75,7 +75,7 @@ final class AdminShiftPublishService
                     'work_date',
                     'sequence',
                     'pattern_code',
-                    'work_minutes',
+                    'work_hours',
                 ])
                 ->map(fn (Shift $shift): array => [
                     'shift_schedule_id' => (int) $schedule->getKey(),
@@ -83,7 +83,7 @@ final class AdminShiftPublishService
                     'work_date' => $shift->work_date->toDateString(),
                     'sequence' => (int) $shift->sequence,
                     'pattern_code' => $shift->pattern_code,
-                    'work_minutes' => (int) $shift->work_minutes,
+                    'work_hours' => $shift->work_hours,
                     'published_at' => $publishedAt,
                     'created_at' => $publishedAt,
                     'updated_at' => $publishedAt,

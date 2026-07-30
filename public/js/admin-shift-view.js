@@ -10,7 +10,7 @@
 
         function applyNormalizedPattern(shift, payload) {
             shift.dataset.shiftPatternId = String(payload.shift_pattern_id);
-            shift.dataset.workMinutes = String(payload.work_minutes);
+            shift.dataset.workHours = String(payload.work_hours);
             shift.textContent = payload.pattern_code;
         }
 
@@ -51,14 +51,14 @@
 
         function recalculateSummaries() {
             const totals = {
-                minutes: 0,
+                workHourHundredths: 0,
                 count: 0,
                 codes: {A: 0, B: 0, C: 0, D: 0, E: 0},
             };
 
             editor.querySelectorAll('tbody tr[data-user-id]').forEach((row) => {
                 const rowTotals = {
-                    minutes: 0,
+                    workHourHundredths: 0,
                     codes: {A: 0, B: 0, C: 0, D: 0, E: 0},
                 };
                 const shifts = Array.from(
@@ -66,11 +66,13 @@
                 );
 
                 shifts.forEach((shift) => {
-                    const minutes = Number(shift.dataset.workMinutes) || 0;
+                    const workHourHundredths = toHundredths(
+                        shift.dataset.workHours,
+                    );
                     const code = shift.textContent.trim();
 
-                    rowTotals.minutes += minutes;
-                    totals.minutes += minutes;
+                    rowTotals.workHourHundredths += workHourHundredths;
+                    totals.workHourHundredths += workHourHundredths;
                     totals.count += 1;
 
                     if (Object.hasOwn(rowTotals.codes, code)) {
@@ -80,8 +82,8 @@
                 });
 
                 setText(
-                    row.querySelector('[data-row-summary="time"]'),
-                    formatMinutes(rowTotals.minutes),
+                    row.querySelector('[data-row-summary="work-hours"]'),
+                    formatHundredths(rowTotals.workHourHundredths),
                 );
                 Object.entries(rowTotals.codes).forEach(([code, count]) => {
                     setText(
@@ -92,8 +94,8 @@
             });
 
             setText(
-                editor.querySelector('[data-grid-summary="time"]'),
-                formatMinutes(totals.minutes),
+                editor.querySelector('[data-grid-summary="work-hours"]'),
+                formatHundredths(totals.workHourHundredths),
             );
             setText(
                 editor.querySelector('[data-grid-summary="total"]'),
@@ -140,11 +142,21 @@
             }
         }
 
-        function formatMinutes(minutes) {
-            const hours = Math.floor(minutes / 60);
-            const remainder = minutes % 60;
+        function toHundredths(value) {
+            const [whole = '0', fraction = ''] = String(value ?? '0').split('.');
 
-            return `${hours}:${String(remainder).padStart(2, '0')}`;
+            return (Number(whole) * 100) + Number(fraction.padEnd(2, '0').slice(0, 2));
+        }
+
+        function formatHundredths(hundredths) {
+            const whole = Math.floor(hundredths / 100);
+            const fraction = hundredths % 100;
+
+            if (fraction === 0) {
+                return String(whole);
+            }
+
+            return `${whole}.${String(fraction).padStart(2, '0').replace(/0$/, '')}`;
         }
 
         return Object.freeze({

@@ -72,7 +72,7 @@ class AdminShiftPublicationTest extends TestCase
             'sequence' => 1,
             'entry_uuid' => (string) Str::uuid(),
             'pattern_code' => $pattern->code,
-            'work_minutes' => $pattern->work_minutes,
+            'work_hours' => $pattern->work_hours,
             'created_by' => $this->manager->getKey(),
             'updated_by' => $this->manager->getKey(),
         ]);
@@ -114,7 +114,7 @@ class AdminShiftPublicationTest extends TestCase
             'work_date' => self::TARGET_MONTH.'-10',
             'sequence' => 1,
             'pattern_code' => 'C',
-            'work_minutes' => $this->shift->work_minutes,
+            'work_hours' => $this->shift->work_hours,
             'published_at' => '2026-07-30 12:00:00',
         ]);
         $this->assertDatabaseHas('shift_schedules', [
@@ -158,7 +158,7 @@ class AdminShiftPublicationTest extends TestCase
         $this->shift->forceFill([
             'store_shift_pattern_id' => $pattern->getKey(),
             'pattern_code' => $pattern->code,
-            'work_minutes' => $pattern->work_minutes,
+            'work_hours' => $pattern->work_hours,
         ])->save();
         $this->schedule->forceFill(['draft_version' => 2])->save();
 
@@ -176,7 +176,7 @@ class AdminShiftPublicationTest extends TestCase
         $this->assertDatabaseHas('published_shifts', [
             'shift_schedule_id' => $this->schedule->getKey(),
             'pattern_code' => 'D',
-            'work_minutes' => $pattern->work_minutes,
+            'work_hours' => $pattern->work_hours,
             'published_at' => '2026-07-30 12:05:00',
         ]);
         $this->assertNotSame($firstPublished, $this->publishedSnapshot());
@@ -218,7 +218,7 @@ class AdminShiftPublicationTest extends TestCase
         $this->shift->forceFill([
             'store_shift_pattern_id' => $pattern->getKey(),
             'pattern_code' => $pattern->code,
-            'work_minutes' => $pattern->work_minutes,
+            'work_hours' => $pattern->work_hours,
         ])->save();
         $this->schedule->forceFill(['draft_version' => 2])->save();
 
@@ -293,10 +293,6 @@ class AdminShiftPublicationTest extends TestCase
                 !== (int) $foreignSchedule->getKey(),
         )));
 
-        $this->store->forceFill(['status' => 'inactive'])->save();
-        $this->actingAs($this->manager)
-            ->postJson($this->publishUrl(), $this->payload())
-            ->assertForbidden();
     }
 
     public function test_store_screen_exposes_publication_contract_without_staff_ui_mixing(): void
@@ -443,13 +439,11 @@ class AdminShiftPublicationTest extends TestCase
             'organization_id' => $organization->getKey(),
             'code' => 'foreign-store',
             'name' => '別組織店舗',
-            'status' => 'active',
             'display_order' => 1,
             'staffing_check_mode' => 'disabled',
         ]);
         $user = User::query()->create([
             'organization_id' => $organization->getKey(),
-            'primary_store_id' => $store->getKey(),
             'name' => '別組織スタッフ',
             'email' => 'foreign-staff@example.com',
             'password' => 'not-used-for-login',
@@ -475,7 +469,7 @@ class AdminShiftPublicationTest extends TestCase
             'work_date' => self::TARGET_MONTH.'-10',
             'sequence' => 1,
             'pattern_code' => 'X',
-            'work_minutes' => 60,
+            'work_hours' => '1.00',
             'published_at' => '2026-07-29 10:00:00',
         ]);
 

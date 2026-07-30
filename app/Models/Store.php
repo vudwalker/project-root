@@ -17,7 +17,6 @@ class Store extends Model
         'code',
         'name',
         'area',
-        'status',
         'display_order',
         'staffing_check_mode',
         'required_staff_count',
@@ -63,10 +62,5 @@ class Store extends Model
     public function staffingRequirements(): HasMany
     {
         return $this->hasMany(StoreStaffingRequirement::class);
-    }
-
-    public function isActive(): bool
-    {
-        return $this->status === 'active';
     }
 }

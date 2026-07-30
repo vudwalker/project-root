@@ -3,6 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Models\Store;
+use App\Models\StoreShiftPattern;
 use App\Models\StoreStaffingRequirement;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -139,13 +140,14 @@ final class AdminStoreManagementService
 
     /**
      * @return array{
-     *     activeManagerIds: SupportCollection<int, int>,
-     *     managerCandidates: Collection<int, User>,
+     *     shiftManagers: Collection<int, User>,
+     *     shiftPatterns: Collection<int, StoreShiftPattern>,
+     *     staffMembers: Collection<int, User>,
      *     staffingRequirement: StoreStaffingRequirement|null,
      *     store: Store
      * }
      */
-    public function detailData(Store $store): array
+    public function detailData(Store $store, array $oldInput = []): array
     {
         $today = $this->today();
 
@@ -156,32 +158,24 @@ final class AdminStoreManagementService
                         'users.id',
                         'users.name',
                         'users.email',
-                        'users.primary_store_id',
                         'users.status',
                     ])
                     ->orderBy('store_user.display_order')
                     ->orderBy('users.name')
                     ->orderBy('users.id');
             },
-            'shiftManagers' => fn (BelongsToMany $query) => $query
-                ->orderBy('users.name')
-                ->orderBy('users.id'),
+            'shiftManagers' => function (BelongsToMany $query) use ($today): void {
+                $this->applyCurrentAssignmentScope($query, $today)
+                    ->select(['users.id', 'users.name', 'users.email'])
+                    ->orderBy('users.name')
+                    ->orderBy('users.id');
+            },
             'shiftPatterns' => fn ($query) => $query
+                ->where('is_active', true)
                 ->orderBy('display_order')
                 ->orderBy('code')
                 ->orderBy('id'),
         ]);
-
-        $managerCandidates = User::query()
-            ->where('organization_id', $store->organization_id)
-            ->where('status', 'active')
-            ->whereHas('roles', fn (Builder $query): Builder => $query->where(
-                'code',
-                'shift_manager',
-            ))
-            ->orderBy('name')
-            ->orderBy('id')
-            ->get(['users.id', 'users.name', 'users.email']);
 
         $staffingRequirement = $store->staffingRequirements()
             ->whereNull('work_date')
@@ -204,15 +198,24 @@ final class AdminStoreManagementService
             ->orderBy('id')
             ->first();
 
-        $activeManagerIds = $store->shiftManagers
-            ->filter(fn (User $user): bool => $this->isCurrentPivot($user, $today))
-            ->pluck('id')
-            ->map(fn (mixed $id): int => (int) $id)
-            ->values();
+        $staffMembers = $this->oldSelectedUsers(
+            $store,
+            $oldInput,
+            'staff_user_ids',
+            'staff',
+        ) ?? $store->staffMembers;
+        $shiftManagers = $this->oldSelectedUsers(
+            $store,
+            $oldInput,
+            'manager_user_ids',
+            'shift_manager',
+        ) ?? $store->shiftManagers;
+        $shiftPatterns = $store->shiftPatterns;
 
         return compact(
-            'activeManagerIds',
-            'managerCandidates',
+            'shiftManagers',
+            'shiftPatterns',
+            'staffMembers',
             'staffingRequirement',
             'store',
         );
@@ -253,12 +256,45 @@ final class AdminStoreManagementService
                 'users.id',
                 'users.name',
                 'users.email',
-                'users.primary_store_id',
             ]);
     }
 
     /**
-     * @param  array{name: string, code: string, area: string, status: string}  $attributes
+     * @return Collection<int, User>
+     */
+    public function searchUnassignedManagers(
+        Store $store,
+        string $search,
+    ): Collection {
+        $today = $this->today();
+
+        return User::query()
+            ->where('organization_id', $store->organization_id)
+            ->where('status', 'active')
+            ->whereHas('roles', fn (Builder $query): Builder => $query->where(
+                'code',
+                'shift_manager',
+            ))
+            ->where(function (Builder $query) use ($search): void {
+                $query
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            })
+            ->whereDoesntHave(
+                'managedStores',
+                function (Builder $query) use ($store, $today): void {
+                    $query->whereKey($store->getKey());
+                    $this->applyCurrentAssignmentScope($query, $today);
+                },
+            )
+            ->orderBy('name')
+            ->orderBy('id')
+            ->limit(20)
+            ->get(['users.id', 'users.name', 'users.email']);
+    }
+
+    /**
+     * @param  array{name: string, code: string, area: string}  $attributes
      */
     public function create(User $actor, array $attributes): Store
     {
@@ -267,40 +303,10 @@ final class AdminStoreManagementService
             'code' => trim($attributes['code']),
             'name' => trim($attributes['name']),
             'area' => trim($attributes['area']),
-            'status' => $attributes['status'],
             'display_order' => 0,
             'staffing_check_mode' => 'disabled',
             'required_staff_count' => null,
         ]));
-    }
-
-    /**
-     * @param  array{name: string, area: string|null, status?: string}  $attributes
-     */
-    public function updateBasic(Store $store, array $attributes): Store
-    {
-        return DB::transaction(function () use ($store, $attributes): Store {
-            $lockedStore = Store::query()
-                ->whereKey($store->getKey())
-                ->where('organization_id', $store->organization_id)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            $area = $attributes['area'];
-
-            $lockedStore->fill([
-                'name' => trim($attributes['name']),
-                'area' => is_string($area) && trim($area) !== ''
-                    ? trim($area)
-                    : null,
-                ...array_key_exists('status', $attributes)
-                    ? ['status' => $attributes['status']]
-                    : [],
-            ]);
-            $lockedStore->save();
-
-            return $lockedStore;
-        });
     }
 
     private function accessibleStoreQuery(User $actor): Builder
@@ -366,12 +372,35 @@ final class AdminStoreManagementService
         )->toDateString();
     }
 
-    private function isCurrentPivot(User $user, string $today): bool
-    {
-        $pivot = $user->pivot;
+    /**
+     * @return Collection<int, User>|null
+     */
+    private function oldSelectedUsers(
+        Store $store,
+        array $oldInput,
+        string $field,
+        string $roleCode,
+    ): ?Collection {
+        if (! array_key_exists($field, $oldInput) || ! is_array($oldInput[$field])) {
+            return null;
+        }
 
-        return (bool) $pivot->is_active
-            && ($pivot->started_on === null || $pivot->started_on <= $today)
-            && ($pivot->ended_on === null || $pivot->ended_on >= $today);
+        $ids = collect($oldInput[$field])
+            ->filter(fn (mixed $id): bool => is_numeric($id))
+            ->map(fn (mixed $id): int => (int) $id)
+            ->unique()
+            ->values();
+        $order = $ids->flip();
+
+        return User::query()
+            ->where('organization_id', $store->organization_id)
+            ->whereKey($ids)
+            ->whereHas('roles', fn (Builder $query): Builder => $query->where(
+                'code',
+                $roleCode,
+            ))
+            ->get(['users.id', 'users.name', 'users.email'])
+            ->sortBy(fn (User $user): int => (int) $order->get($user->getKey()))
+            ->values();
     }
 }

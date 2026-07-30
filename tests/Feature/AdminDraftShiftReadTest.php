@@ -10,6 +10,7 @@ use App\Models\ShiftSchedule;
 use App\Models\Store;
 use App\Models\StoreShiftPattern;
 use App\Models\User;
+use App\Support\WorkHours;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -58,28 +59,6 @@ class AdminDraftShiftReadTest extends TestCase
 
         $this->get('/admin/shifts/stores/noda?month=2026-07')
             ->assertForbidden();
-    }
-
-    public function test_assigned_admins_can_open_inactive_store_read_only(): void
-    {
-        $this->actingAs($this->systemAdmin())
-            ->get('/admin/shifts/stores/noda?month=2026-07')
-            ->assertOk()
-            ->assertSee('data-store-read-only="false"', false);
-
-        $store = $this->store('daianji');
-        $store->update(['status' => 'inactive']);
-
-        $this->get('/admin/shifts/stores/daianji?month=2026-07')
-            ->assertOk()
-            ->assertSee('data-store-read-only="true"', false)
-            ->assertSee('disabled', false);
-
-        $this->actingAs($this->manager())
-            ->get('/admin/shifts/stores/daianji?month=2026-07')
-            ->assertOk()
-            ->assertSee('data-store-read-only="true"', false)
-            ->assertSee('disabled', false);
     }
 
     public function test_store_screen_displays_members_even_when_schedule_and_shifts_do_not_exist(): void
@@ -165,7 +144,6 @@ class AdminDraftShiftReadTest extends TestCase
             'organization_id' => $organization->getKey(),
             'code' => 'empty-store',
             'name' => '所属なし店舗',
-            'status' => 'active',
             'display_order' => 99,
             'staffing_check_mode' => 'disabled',
         ]);
@@ -326,7 +304,7 @@ class AdminDraftShiftReadTest extends TestCase
             'sequence' => 2,
             'entry_uuid' => (string) Str::uuid(),
             'pattern_code' => 'C',
-            'work_minutes' => 450,
+            'work_hours' => '7.50',
         ]);
 
         $content = $this->actingAs($this->manager())
@@ -394,14 +372,13 @@ class AdminDraftShiftReadTest extends TestCase
             'organization_id' => $organization->getKey(),
             'code' => 'other-store',
             'name' => '別組織店舗',
-            'status' => 'active',
             'display_order' => 1,
             'staffing_check_mode' => 'disabled',
         ]);
         $pattern = StoreShiftPattern::query()->create([
             'store_id' => $store->getKey(),
             'code' => 'X',
-            'work_minutes' => 60,
+            'work_hours' => '1.00',
             'display_order' => 1,
             'is_active' => true,
         ]);
@@ -417,7 +394,7 @@ class AdminDraftShiftReadTest extends TestCase
             'sequence' => 1,
             'entry_uuid' => (string) Str::uuid(),
             'pattern_code' => 'X',
-            'work_minutes' => 60,
+            'work_hours' => '1.00',
         ]);
 
         $this->actingAs($this->manager())
@@ -529,7 +506,7 @@ class AdminDraftShiftReadTest extends TestCase
             .'data-user-id="%d"\s+data-store-id="%d"\s+'
             .'data-shift-date="%s"\s+data-shift-id="%d"\s+'
             .'data-entry-uuid="%s"\s+data-sequence="%d"\s+'
-            .'data-shift-pattern-id="%d"\s+data-work-minutes="%d"[^>]*>'
+            .'data-shift-pattern-id="%d"\s+data-work-hours="%s"[^>]*>'
             .'%s<\/span>/s',
             $shift->user_id,
             $store->getKey(),
@@ -538,7 +515,7 @@ class AdminDraftShiftReadTest extends TestCase
             preg_quote((string) $shift->entry_uuid, '/'),
             $shift->sequence,
             $shift->store_shift_pattern_id,
-            $shift->work_minutes,
+            WorkHours::format($shift->work_hours),
             preg_quote($shift->pattern_code, '/'),
         );
 

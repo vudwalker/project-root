@@ -127,7 +127,7 @@ final class AdminShiftWriteService
                     'sequence' => $nextSequence,
                     'entry_uuid' => $entryUuid,
                     'pattern_code' => $pattern->code,
-                    'work_minutes' => $pattern->work_minutes,
+                    'work_hours' => $pattern->work_hours,
                     'created_by' => $actor->getKey(),
                     'updated_by' => $actor->getKey(),
                 ]);
@@ -211,7 +211,7 @@ final class AdminShiftWriteService
             $shift->forceFill([
                 'store_shift_pattern_id' => $pattern->getKey(),
                 'pattern_code' => $pattern->code,
-                'work_minutes' => $pattern->work_minutes,
+                'work_hours' => $pattern->work_hours,
                 'updated_by' => $actor->getKey(),
             ])->save();
             $schedule = $this->scheduleWriter->markScheduleChanged(

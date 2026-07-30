@@ -28,7 +28,6 @@ final class AdminDraftShiftReadService
     {
         $query = Store::query()
             ->where('organization_id', $actor->organization_id)
-            ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
             ->orderBy('display_order')
             ->orderBy('name')
             ->orderBy('id');
@@ -41,7 +40,6 @@ final class AdminDraftShiftReadService
             ->toDateString();
 
         return $query
-            ->where('status', 'active')
             ->whereHas('shiftManagers', function (Builder $builder) use ($actor, $today): void {
                 $builder
                     ->whereKey($actor->getKey())
@@ -70,7 +68,7 @@ final class AdminDraftShiftReadService
         $monthStart = $targetMonth->startOfMonth()->toDateString();
         $monthEnd = $targetMonth->endOfMonth()->toDateString();
 
-        return $store->staffMembers()
+        $currentMembers = $store->staffMembers()
             ->select(['users.id', 'users.name', 'users.status'])
             ->where('users.status', 'active')
             ->whereHas(
@@ -95,6 +93,45 @@ final class AdminDraftShiftReadService
             ->orderBy('users.name')
             ->orderBy('users.id')
             ->get();
+
+        $draftUserIds = Shift::query()
+            ->whereHas(
+                'schedule',
+                fn (Builder $query): Builder => $query
+                    ->where('store_id', $store->getKey())
+                    ->whereDate('target_month', $monthStart),
+            )
+            ->whereBetween('work_date', [$monthStart, $monthEnd])
+            ->distinct()
+            ->pluck('user_id');
+        $currentUserIds = $currentMembers->modelKeys();
+        $draftOnlyMembers = User::query()
+            ->select(['users.id', 'users.name', 'users.status'])
+            ->where('organization_id', $store->organization_id)
+            ->where('status', 'active')
+            ->whereKey($draftUserIds)
+            ->when(
+                $currentUserIds !== [],
+                fn (Builder $query): Builder => $query->whereNotIn(
+                    'users.id',
+                    $currentUserIds,
+                ),
+            )
+            ->whereHas(
+                'roles',
+                fn (Builder $builder): Builder => $builder->where(
+                    'roles.code',
+                    'staff',
+                ),
+            )
+            ->orderBy('users.name')
+            ->orderBy('users.id')
+            ->get();
+
+        return new Collection([
+            ...$currentMembers->all(),
+            ...$draftOnlyMembers->all(),
+        ]);
     }
 
     /**
@@ -125,7 +162,7 @@ final class AdminDraftShiftReadService
                             'sequence',
                             'entry_uuid',
                             'pattern_code',
-                            'work_minutes',
+                            'work_hours',
                         ])
                         ->when(
                             $staffIds === [],
@@ -155,11 +192,11 @@ final class AdminDraftShiftReadService
             ->where('is_active', true)
             ->orderBy('display_order')
             ->orderBy('code')
-            ->get(['id', 'code', 'work_minutes'])
+            ->get(['id', 'code', 'work_hours'])
             ->map(fn (StoreShiftPattern $pattern): array => [
                 'id' => (int) $pattern->getKey(),
                 'code' => $pattern->code,
-                'workMinutes' => (int) $pattern->work_minutes,
+                'workHours' => (string) $pattern->work_hours,
             ])
             ->all();
 
@@ -172,7 +209,7 @@ final class AdminDraftShiftReadService
             'hasSchedule' => $schedule !== null,
             'hasStaff' => $staffMembers->isNotEmpty(),
             'emptyMessage' => $staffMembers->isEmpty() ? '所属スタッフがいません' : null,
-            'isReadOnly' => ! $store->isActive(),
+            'isReadOnly' => false,
             'hasBlockingWarnings' => $warningResult['blocking_warning_count'] > 0,
             'canPublish' => $warningResult['can_publish'],
             'publicationState' => $this->screenProjector->publicationState($schedule),
@@ -255,7 +292,7 @@ final class AdminDraftShiftReadService
                 'sequence',
                 'entry_uuid',
                 'pattern_code',
-                'work_minutes',
+                'work_hours',
             ])
             ->where('user_id', $staff->getKey())
             ->whereBetween('work_date', [$monthStart, $monthEnd])
@@ -271,7 +308,7 @@ final class AdminDraftShiftReadService
             })
             ->with([
                 'schedule:id,store_id,target_month,shift_updated_at,draft_version,published_version,published_draft_version,published_at',
-                'schedule.store:id,name,status,display_order',
+                'schedule.store:id,name,display_order',
             ])
             ->orderBy('work_date')
             ->orderBy('sequence')

@@ -86,7 +86,7 @@ class AdminShiftMutationTest extends TestCase
                 'shift_date' => '2026-08-10',
                 'shift_pattern_id' => $this->patternC->getKey(),
                 'pattern_code' => 'C',
-                'work_minutes' => $this->patternC->work_minutes,
+                'work_hours' => $this->patternC->work_hours,
                 'created' => true,
                 'draft_version' => 1,
             ])
@@ -111,7 +111,7 @@ class AdminShiftMutationTest extends TestCase
             'sequence' => 1,
             'entry_uuid' => $entryUuid,
             'pattern_code' => 'C',
-            'work_minutes' => $this->patternC->work_minutes,
+            'work_hours' => $this->patternC->work_hours,
             'created_by' => $this->manager->getKey(),
             'updated_by' => $this->manager->getKey(),
         ]);
@@ -199,7 +199,7 @@ class AdminShiftMutationTest extends TestCase
         );
     }
 
-    public function test_store_organization_state_and_manager_period_are_enforced(): void
+    public function test_store_organization_and_manager_period_are_enforced(): void
     {
         $this->actingAs($this->manager)
             ->postJson(
@@ -215,12 +215,6 @@ class AdminShiftMutationTest extends TestCase
                 $this->validPayload(),
             )
             ->assertForbidden();
-
-        $this->store->update(['status' => 'inactive']);
-        $this->actingAs($this->admin)
-            ->postJson($this->storeUrl(), $this->validPayload())
-            ->assertForbidden();
-        $this->store->update(['status' => 'active']);
 
         DB::table('store_shift_manager')
             ->where('store_id', $this->store->getKey())
@@ -467,7 +461,7 @@ class AdminShiftMutationTest extends TestCase
                 'shift_date' => '2026-08-10',
                 'shift_pattern_id' => $this->patternD->getKey(),
                 'pattern_code' => 'D',
-                'work_minutes' => $this->patternD->work_minutes,
+                'work_hours' => $this->patternD->work_hours,
                 'draft_version' => $scheduleVersion + 1,
             ]);
 
@@ -475,7 +469,7 @@ class AdminShiftMutationTest extends TestCase
             'id' => $shiftId,
             'store_shift_pattern_id' => $this->patternD->getKey(),
             'pattern_code' => 'D',
-            'work_minutes' => $this->patternD->work_minutes,
+            'work_hours' => $this->patternD->work_hours,
             'updated_by' => $this->manager->getKey(),
         ]);
         $this->assertSame($publishedBefore, $this->publishedSnapshot());
@@ -540,8 +534,9 @@ class AdminShiftMutationTest extends TestCase
                 'shift_pattern_id' => $this->patternD->getKey(),
                 'expected_draft_version' => $this->currentDraftVersion(),
             ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('user_id');
+            ->assertOk()
+            ->assertJsonPath('shift_id', $shiftId)
+            ->assertJsonPath('work_hours', $this->patternD->work_hours);
     }
 
     public function test_delete_resequences_remaining_cell_shifts_and_keeps_schedule(): void
@@ -574,7 +569,7 @@ class AdminShiftMutationTest extends TestCase
                     'shift_date' => '2026-08-10',
                     'shift_pattern_id' => $this->patternC->getKey(),
                     'pattern_code' => 'C',
-                    'work_minutes' => $this->patternC->work_minutes,
+                    'work_hours' => $this->patternC->work_hours,
                 ]],
             ]);
 
@@ -807,7 +802,6 @@ class AdminShiftMutationTest extends TestCase
             'organization_id' => $organization->getKey(),
             'code' => 'foreign-store',
             'name' => '別組織店舗',
-            'status' => 'active',
             'display_order' => 1,
             'staffing_check_mode' => 'disabled',
             'required_staff_count' => null,
@@ -822,7 +816,6 @@ class AdminShiftMutationTest extends TestCase
         $store = $this->foreignStore();
         $user = User::query()->create([
             'organization_id' => $store->organization_id,
-            'primary_store_id' => $store->getKey(),
             'name' => '別組織スタッフ',
             'email' => 'foreign-staff@example.com',
             'password' => 'not-used-for-login',
@@ -840,7 +833,7 @@ class AdminShiftMutationTest extends TestCase
         $pattern = StoreShiftPattern::query()->create([
             'store_id' => $store->getKey(),
             'code' => 'C',
-            'work_minutes' => 450,
+            'work_hours' => '7.50',
             'display_order' => 1,
             'is_active' => true,
         ]);
@@ -860,7 +853,7 @@ class AdminShiftMutationTest extends TestCase
             'sequence' => 1,
             'entry_uuid' => (string) Str::uuid(),
             'pattern_code' => $pattern->code,
-            'work_minutes' => $pattern->work_minutes,
+            'work_hours' => $pattern->work_hours,
             'created_by' => $user->getKey(),
             'updated_by' => $user->getKey(),
         ]);

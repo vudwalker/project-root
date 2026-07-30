@@ -54,7 +54,7 @@ class PublishedShiftSeeder extends Seeder
             foreach ($this->shifts() as $email => $entries) {
                 $user = $users->get($email);
 
-                foreach ($entries as [$day, $code, $workMinutes]) {
+                foreach ($entries as [$day, $code, $workHours]) {
                     $workDate = CarbonImmutable::create(2026, 7, $day);
                     $workDateString = $workDate->toDateString();
                     $pattern = $patterns->get($code);
@@ -74,7 +74,7 @@ class PublishedShiftSeeder extends Seeder
                             'store_shift_pattern_id' => $pattern->getKey(),
                             'entry_uuid' => $entryUuid,
                             'pattern_code' => $code,
-                            'work_minutes' => $workMinutes,
+                            'work_hours' => $workHours,
                             'created_by' => $manager->getKey(),
                             'updated_by' => $manager->getKey(),
                         ],
@@ -89,7 +89,7 @@ class PublishedShiftSeeder extends Seeder
                         ],
                         [
                             'pattern_code' => $shift->pattern_code,
-                            'work_minutes' => $shift->work_minutes,
+                            'work_hours' => $shift->work_hours,
                             'published_at' => self::PUBLISHED_AT,
                         ],
                     );
@@ -107,45 +107,45 @@ class PublishedShiftSeeder extends Seeder
     {
         return [
             'staff@example.com' => [
-                [3, 'D', 360],
-                [8, 'C', 390],
-                [12, 'C', 390],
-                [20, 'C', 390],
-                [26, 'C', 390],
+                [3, 'D', '6.00'],
+                [8, 'C', '6.50'],
+                [12, 'C', '6.50'],
+                [20, 'C', '6.50'],
+                [26, 'C', '6.50'],
             ],
             'miyake@example.com' => [
-                [3, 'C', 390],
-                [5, 'C', 390],
-                [10, 'C', 390],
-                [11, 'C', 390],
-                [17, 'C', 390],
-                [24, 'C', 390],
-                [25, 'C', 390],
+                [3, 'C', '6.50'],
+                [5, 'C', '6.50'],
+                [10, 'C', '6.50'],
+                [11, 'C', '6.50'],
+                [17, 'C', '6.50'],
+                [24, 'C', '6.50'],
+                [25, 'C', '6.50'],
             ],
             'morinaga@example.com' => [
-                [1, 'C', 390],
-                [4, 'C', 390],
-                [13, 'C', 390],
-                [18, 'C', 390],
-                [22, 'C', 390],
-                [31, 'C', 390],
+                [1, 'C', '6.50'],
+                [4, 'C', '6.50'],
+                [13, 'C', '6.50'],
+                [18, 'C', '6.50'],
+                [22, 'C', '6.50'],
+                [31, 'C', '6.50'],
             ],
             'kawamoto@example.com' => [
-                [7, 'C', 390],
-                [14, 'C', 390],
-                [15, 'C', 390],
-                [21, 'C', 390],
-                [28, 'C', 390],
-                [29, 'C', 390],
+                [7, 'C', '6.50'],
+                [14, 'C', '6.50'],
+                [15, 'C', '6.50'],
+                [21, 'C', '6.50'],
+                [28, 'C', '6.50'],
+                [29, 'C', '6.50'],
             ],
             'shimizu@example.com' => [
-                [2, 'C', 390],
-                [8, 'C', 390],
-                [9, 'C', 390],
-                [16, 'C', 390],
-                [23, 'C', 390],
-                [27, 'C', 390],
-                [30, 'C', 390],
+                [2, 'C', '6.50'],
+                [8, 'C', '6.50'],
+                [9, 'C', '6.50'],
+                [16, 'C', '6.50'],
+                [23, 'C', '6.50'],
+                [27, 'C', '6.50'],
+                [30, 'C', '6.50'],
             ],
         ];
     }

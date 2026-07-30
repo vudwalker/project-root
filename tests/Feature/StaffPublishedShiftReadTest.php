@@ -10,7 +10,6 @@ use App\Models\StoreShiftPattern;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -196,7 +195,7 @@ class StaffPublishedShiftReadTest extends TestCase
             'work_date' => '2026-09-12',
             'sequence' => 1,
             'pattern_code' => 'D',
-            'work_minutes' => 360,
+            'work_hours' => '6.00',
             'published_at' => '2026-07-30 10:59:59',
         ]);
         $unpublishedStore = $this->sameOrganizationStore('unpublished-store');
@@ -211,7 +210,7 @@ class StaffPublishedShiftReadTest extends TestCase
             'work_date' => '2026-09-13',
             'sequence' => 1,
             'pattern_code' => 'E',
-            'work_minutes' => 360,
+            'work_hours' => '6.00',
             'published_at' => '2026-07-30 11:00:00',
         ]);
 
@@ -256,7 +255,7 @@ class StaffPublishedShiftReadTest extends TestCase
 
                 return $staff->contains('id', $this->staff->getKey())
                     && $staff->contains('id', $this->otherStaff->getKey())
-                    && ! $staff->contains('id', $outsider->getKey());
+                    && $staff->contains('id', $outsider->getKey());
             });
         $this->assertStoreStaffCode(
             $response,
@@ -270,6 +269,12 @@ class StaffPublishedShiftReadTest extends TestCase
             '2026-09-09',
             'B',
         );
+        $this->assertStoreStaffCode(
+            $response,
+            $outsider,
+            '2026-09-10',
+            'C',
+        );
 
         $this->get('/staff/store/noda?month='.self::TARGET_MONTH)
             ->assertNotFound();
@@ -278,15 +283,6 @@ class StaffPublishedShiftReadTest extends TestCase
         $this->attachMembership($this->staff, $foreignStore);
         $this->get(
             "/staff/store/{$foreignStore->code}?month=".self::TARGET_MONTH,
-        )->assertNotFound();
-
-        $inactiveStore = $this->sameOrganizationStore(
-            'inactive-store',
-            'inactive',
-        );
-        $this->attachMembership($this->staff, $inactiveStore);
-        $this->get(
-            "/staff/store/{$inactiveStore->code}?month=".self::TARGET_MONTH,
         )->assertNotFound();
 
         $disabledMembershipStore = $this->sameOrganizationStore(
@@ -326,54 +322,6 @@ class StaffPublishedShiftReadTest extends TestCase
             ->assertForbidden();
         $this->get('/staff/store/daianji?month='.self::TARGET_MONTH)
             ->assertForbidden();
-    }
-
-    public function test_inactive_store_is_hidden_from_store_access_but_kept_in_personal_history(): void
-    {
-        $staff = User::query()
-            ->where('email', 'staff@example.com')
-            ->firstOrFail();
-        $store = Store::query()
-            ->where('code', 'noda')
-            ->firstOrFail();
-        $publishedBefore = PublishedShift::query()
-            ->whereHas(
-                'schedule',
-                fn (Builder $query): Builder => $query->where(
-                    'store_id',
-                    $store->getKey(),
-                ),
-            )
-            ->count();
-        $store->forceFill(['status' => 'inactive'])->save();
-
-        $personalResponse = $this->actingAs($staff)
-            ->get('/staff?month=2026-07')
-            ->assertOk();
-
-        $personalResponse
-            ->assertViewHas('stores', function (array $stores): bool {
-                return ! array_key_exists('noda', $stores);
-            })
-            ->assertViewHas('personalShifts', function (array $shifts): bool {
-                return collect($shifts)
-                    ->flatten(1)
-                    ->contains('store_code', 'noda');
-            });
-        $this->get('/staff/store/noda?month=2026-07')
-            ->assertNotFound();
-        $this->assertSame(
-            $publishedBefore,
-            PublishedShift::query()
-                ->whereHas(
-                    'schedule',
-                    fn (Builder $query): Builder => $query->where(
-                        'store_id',
-                        $store->getKey(),
-                    ),
-                )
-                ->count(),
-        );
     }
 
     public function test_staff_requests_query_published_shifts_and_never_query_drafts(): void
@@ -534,7 +482,7 @@ class StaffPublishedShiftReadTest extends TestCase
                 'work_date' => $workDate,
                 'sequence' => 1,
                 'pattern_code' => $code,
-                'work_minutes' => 360 + $index,
+                'work_hours' => number_format(6 + ($index / 100), 2, '.', ''),
                 'published_at' => $publishedAt,
             ]);
         }
@@ -558,15 +506,12 @@ class StaffPublishedShiftReadTest extends TestCase
         ]);
     }
 
-    private function sameOrganizationStore(
-        string $code,
-        string $status = 'active',
-    ): Store {
+    private function sameOrganizationStore(string $code): Store
+    {
         return Store::query()->create([
             'organization_id' => $this->store->organization_id,
             'code' => $code,
             'name' => $code,
-            'status' => $status,
             'display_order' => 90,
             'staffing_check_mode' => 'disabled',
         ]);
@@ -584,7 +529,6 @@ class StaffPublishedShiftReadTest extends TestCase
             'organization_id' => $organization->getKey(),
             'code' => 'foreign-store-'.Str::lower(Str::random(8)),
             'name' => '別組織店舗',
-            'status' => 'active',
             'display_order' => 1,
             'staffing_check_mode' => 'disabled',
         ]);

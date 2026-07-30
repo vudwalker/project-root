@@ -15,7 +15,7 @@ class Shift extends Model
         'sequence',
         'entry_uuid',
         'pattern_code',
-        'work_minutes',
+        'work_hours',
         'created_by',
         'updated_by',
     ];
@@ -25,7 +25,7 @@ class Shift extends Model
         return [
             'work_date' => 'date',
             'sequence' => 'integer',
-            'work_minutes' => 'integer',
+            'work_hours' => 'decimal:2',
         ];
     }
 

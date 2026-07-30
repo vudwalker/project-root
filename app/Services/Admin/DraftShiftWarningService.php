@@ -112,7 +112,7 @@ final class DraftShiftWarningService
                 $query->where('organization_id', $store->organization_id);
             })
             ->with([
-                'store:id,organization_id,name,code,status,display_order',
+                'store:id,organization_id,name,code,display_order',
                 'shifts' => function ($query) use ($targetMonth): void {
                     $query
                         ->select([
@@ -124,7 +124,7 @@ final class DraftShiftWarningService
                             'sequence',
                             'entry_uuid',
                             'pattern_code',
-                            'work_minutes',
+                            'work_hours',
                         ])
                         ->whereDate(
                             'work_date',

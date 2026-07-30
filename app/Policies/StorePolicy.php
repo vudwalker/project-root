@@ -54,21 +54,13 @@ final class StorePolicy
     }
 
     /**
-     * 店舗状態を変更できるのは、同一組織のシステム管理者だけです。
-     */
-    public function changeAdminStoreStatus(User $user, Store $store): bool
-    {
-        return $user->canAccessAdmin()
-            && $user->hasRole('system_admin')
-            && (int) $user->organization_id === (int) $store->organization_id;
-    }
-
-    /**
      * 担当シフト管理者を変更できるのは同一組織のシステム管理者だけです。
      */
     public function manageAdminStoreManagers(User $user, Store $store): bool
     {
-        return $this->changeAdminStoreStatus($user, $store);
+        return $user->canAccessAdmin()
+            && $user->hasRole('system_admin')
+            && (int) $user->organization_id === (int) $store->organization_id;
     }
 
     /**
@@ -84,7 +76,7 @@ final class StorePolicy
      */
     public function editAdminShifts(User $user, Store $store): bool
     {
-        if (! $store->isActive() || ! $this->viewAdminShifts($user, $store)) {
+        if (! $this->viewAdminShifts($user, $store)) {
             return false;
         }
 

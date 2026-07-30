@@ -13,7 +13,7 @@ class PublishedShift extends Model
         'work_date',
         'sequence',
         'pattern_code',
-        'work_minutes',
+        'work_hours',
         'published_at',
     ];
 
@@ -22,7 +22,7 @@ class PublishedShift extends Model
         return [
             'work_date' => 'date',
             'sequence' => 'integer',
-            'work_minutes' => 'integer',
+            'work_hours' => 'decimal:2',
             'published_at' => 'datetime',
         ];
     }
