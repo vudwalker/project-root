@@ -2,24 +2,24 @@
 
 namespace App\Services\Admin;
 
-use App\Exceptions\DraftVersionConflictException;
 use App\Models\Shift;
-use App\Models\ShiftSchedule;
 use App\Models\Store;
-use App\Models\StoreShiftPattern;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 /**
- * 管理者用店舗別シフト編集画面から行う下書き変更を担当します。
+ * 管理者用・店舗別シフト編集画面から行う下書き変更を担当します。
  */
 final class AdminShiftWriteService
 {
+    public function __construct(
+        private readonly AdminShiftWriteTargetResolver $targetResolver,
+        private readonly AdminShiftScheduleWriter $scheduleWriter,
+        private readonly AdminShiftWritePayloadFactory $payloadFactory,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -51,7 +51,7 @@ final class AdminShiftWriteService
                     ->first();
 
                 if ($existing instanceof Shift) {
-                    $this->assertIdempotentIdentity(
+                    $this->targetResolver->assertIdempotentIdentity(
                         $existing,
                         $store,
                         $targetMonth,
@@ -60,12 +60,27 @@ final class AdminShiftWriteService
                         $patternId,
                     );
 
-                    return $this->savedPayload($existing, $existing->schedule, false);
+                    return $this->payloadFactory->savedPayload(
+                        $existing,
+                        $existing->schedule,
+                        false,
+                    );
                 }
 
-                $staff = $this->resolveEligibleStaff($store, $userId, $workDate);
-                $pattern = $this->resolveActivePattern($store, $patternId);
-                $schedule = $this->lockOrCreateSchedule($store, $actor, $targetMonth);
+                $staff = $this->targetResolver->resolveEligibleStaff(
+                    $store,
+                    $userId,
+                    $workDate,
+                );
+                $pattern = $this->targetResolver->resolveActivePattern(
+                    $store,
+                    $patternId,
+                );
+                $schedule = $this->scheduleWriter->lockOrCreateSchedule(
+                    $store,
+                    $actor,
+                    $targetMonth,
+                );
 
                 // 同じ店舗・対象月の追加要求を直列化した後でもう一度UUIDを確認します。
                 $existing = Shift::query()
@@ -77,7 +92,7 @@ final class AdminShiftWriteService
                     $existing->load(
                         'schedule:id,store_id,target_month,draft_version,shift_updated_at',
                     );
-                    $this->assertIdempotentIdentity(
+                    $this->targetResolver->assertIdempotentIdentity(
                         $existing,
                         $store,
                         $targetMonth,
@@ -86,10 +101,17 @@ final class AdminShiftWriteService
                         $patternId,
                     );
 
-                    return $this->savedPayload($existing, $schedule, false);
+                    return $this->payloadFactory->savedPayload(
+                        $existing,
+                        $schedule,
+                        false,
+                    );
                 }
 
-                $this->assertExpectedVersion($schedule, $expectedDraftVersion);
+                $this->scheduleWriter->assertExpectedVersion(
+                    $schedule,
+                    $expectedDraftVersion,
+                );
 
                 $nextSequence = (int) Shift::query()
                     ->where('shift_schedule_id', $schedule->getKey())
@@ -109,9 +131,12 @@ final class AdminShiftWriteService
                     'created_by' => $actor->getKey(),
                     'updated_by' => $actor->getKey(),
                 ]);
-                $schedule = $this->markScheduleChanged($schedule, $actor);
+                $schedule = $this->scheduleWriter->markScheduleChanged(
+                    $schedule,
+                    $actor,
+                );
 
-                return $this->savedPayload($shift, $schedule, true);
+                return $this->payloadFactory->savedPayload($shift, $schedule, true);
             }, 3);
         } catch (QueryException $exception) {
             if (! $this->isUniqueConstraintViolation($exception)) {
@@ -128,7 +153,7 @@ final class AdminShiftWriteService
                 throw $exception;
             }
 
-            $this->assertIdempotentIdentity(
+            $this->targetResolver->assertIdempotentIdentity(
                 $existing,
                 $store,
                 $targetMonth,
@@ -137,7 +162,11 @@ final class AdminShiftWriteService
                 $patternId,
             );
 
-            return $this->savedPayload($existing, $existing->schedule, false);
+            return $this->payloadFactory->savedPayload(
+                $existing,
+                $existing->schedule,
+                false,
+            );
         }
     }
 
@@ -160,13 +189,13 @@ final class AdminShiftWriteService
             $patternId,
             $expectedDraftVersion,
         ): array {
-            [$shift, $schedule] = $this->lockShift(
+            [$shift, $schedule] = $this->scheduleWriter->lockShift(
                 $store,
                 $targetMonth,
                 $shiftId,
                 $expectedDraftVersion,
             );
-            $this->resolveEligibleStaff(
+            $this->targetResolver->resolveEligibleStaff(
                 $store,
                 (int) $shift->user_id,
                 CarbonImmutable::parse(
@@ -174,7 +203,10 @@ final class AdminShiftWriteService
                     (string) config('app.timezone', 'Asia/Tokyo'),
                 ),
             );
-            $pattern = $this->resolveActivePattern($store, $patternId);
+            $pattern = $this->targetResolver->resolveActivePattern(
+                $store,
+                $patternId,
+            );
 
             $shift->forceFill([
                 'store_shift_pattern_id' => $pattern->getKey(),
@@ -182,9 +214,12 @@ final class AdminShiftWriteService
                 'work_minutes' => $pattern->work_minutes,
                 'updated_by' => $actor->getKey(),
             ])->save();
-            $schedule = $this->markScheduleChanged($schedule, $actor);
+            $schedule = $this->scheduleWriter->markScheduleChanged(
+                $schedule,
+                $actor,
+            );
 
-            return $this->savedPayload($shift, $schedule, false);
+            return $this->payloadFactory->savedPayload($shift, $schedule, false);
         }, 3);
     }
 
@@ -205,7 +240,7 @@ final class AdminShiftWriteService
             $shiftId,
             $expectedDraftVersion,
         ): array {
-            [$shift, $schedule] = $this->lockShift(
+            [$shift, $schedule] = $this->scheduleWriter->lockShift(
                 $store,
                 $targetMonth,
                 $shiftId,
@@ -240,262 +275,21 @@ final class AdminShiftWriteService
                 ])->save();
             }
 
-            $schedule = $this->markScheduleChanged($schedule, $actor);
+            $schedule = $this->scheduleWriter->markScheduleChanged(
+                $schedule,
+                $actor,
+            );
 
             return [
                 'deleted_shift_id' => $deletedShiftId,
                 'entry_uuid' => $entryUuid,
                 'remaining_shifts' => $remaining
-                    ->map(fn (Shift $remainingShift): array => $this->normalizeShift(
-                        $remainingShift,
-                    ))
+                    ->map(fn (Shift $remainingShift): array => $this->payloadFactory
+                        ->normalizeShift($remainingShift))
                     ->all(),
-                ...$this->schedulePayload($schedule),
+                ...$this->payloadFactory->schedulePayload($schedule),
             ];
         }, 3);
-    }
-
-    private function resolveEligibleStaff(
-        Store $store,
-        int $userId,
-        CarbonImmutable $workDate,
-    ): User {
-        $date = $workDate->toDateString();
-        $staff = User::query()
-            ->whereKey($userId)
-            ->where('organization_id', $store->organization_id)
-            ->where('status', 'active')
-            ->whereHas(
-                'roles',
-                fn (Builder $builder): Builder => $builder->where(
-                    'roles.code',
-                    'staff',
-                ),
-            )
-            ->whereHas('stores', function (Builder $builder) use ($store, $date): void {
-                $builder
-                    ->where('stores.id', $store->getKey())
-                    ->where('store_user.is_active', true)
-                    ->where(function (Builder $period) use ($date): void {
-                        $period
-                            ->whereNull('store_user.started_on')
-                            ->orWhereDate('store_user.started_on', '<=', $date);
-                    })
-                    ->where(function (Builder $period) use ($date): void {
-                        $period
-                            ->whereNull('store_user.ended_on')
-                            ->orWhereDate('store_user.ended_on', '>=', $date);
-                    });
-            })
-            ->first();
-
-        if (! $staff instanceof User) {
-            throw ValidationException::withMessages([
-                'user_id' => '対象日にこの店舗へシフトを登録できるスタッフではありません。',
-            ]);
-        }
-
-        return $staff;
-    }
-
-    private function resolveActivePattern(Store $store, int $patternId): StoreShiftPattern
-    {
-        $pattern = StoreShiftPattern::query()
-            ->whereKey($patternId)
-            ->where('store_id', $store->getKey())
-            ->where('is_active', true)
-            ->first();
-
-        if (! $pattern instanceof StoreShiftPattern) {
-            throw ValidationException::withMessages([
-                'shift_pattern_id' => 'この店舗で利用できるシフトパターンを指定してください。',
-            ]);
-        }
-
-        return $pattern;
-    }
-
-    private function lockOrCreateSchedule(
-        Store $store,
-        User $actor,
-        CarbonImmutable $targetMonth,
-    ): ShiftSchedule {
-        $schedule = ShiftSchedule::query()
-            ->where('store_id', $store->getKey())
-            ->whereDate('target_month', $targetMonth->toDateString())
-            ->lockForUpdate()
-            ->first();
-
-        if ($schedule instanceof ShiftSchedule) {
-            return $schedule;
-        }
-
-        $timestamp = now((string) config('app.timezone', 'Asia/Tokyo'));
-
-        ShiftSchedule::query()->insertOrIgnore([
-            'store_id' => $store->getKey(),
-            'target_month' => $targetMonth->toDateString(),
-            'draft_version' => 0,
-            'published_version' => null,
-            'shift_updated_at' => null,
-            'published_at' => null,
-            'published_by' => null,
-            'created_by' => $actor->getKey(),
-            'updated_by' => $actor->getKey(),
-            'created_at' => $timestamp,
-            'updated_at' => $timestamp,
-        ]);
-
-        return ShiftSchedule::query()
-            ->where('store_id', $store->getKey())
-            ->whereDate('target_month', $targetMonth->toDateString())
-            ->lockForUpdate()
-            ->firstOrFail();
-    }
-
-    /**
-     * @return array{0: Shift, 1: ShiftSchedule}
-     */
-    private function lockShift(
-        Store $store,
-        CarbonImmutable $targetMonth,
-        int $shiftId,
-        int $expectedDraftVersion,
-    ): array {
-        $reference = Shift::query()
-            ->select(['id', 'shift_schedule_id'])
-            ->find($shiftId);
-
-        if (! $reference instanceof Shift) {
-            $this->throwShiftNotFound($shiftId);
-        }
-
-        $schedule = ShiftSchedule::query()
-            ->whereKey($reference->shift_schedule_id)
-            ->lockForUpdate()
-            ->first();
-
-        if (
-            ! $schedule instanceof ShiftSchedule
-            || (int) $schedule->store_id !== (int) $store->getKey()
-            || $schedule->target_month->toDateString() !== $targetMonth->toDateString()
-        ) {
-            $this->throwShiftNotFound($shiftId);
-        }
-
-        $this->assertExpectedVersion($schedule, $expectedDraftVersion);
-
-        $shift = Shift::query()
-            ->whereKey($shiftId)
-            ->where('shift_schedule_id', $schedule->getKey())
-            ->lockForUpdate()
-            ->first();
-
-        if (! $shift instanceof Shift) {
-            $this->throwShiftNotFound($shiftId);
-        }
-
-        return [$shift, $schedule];
-    }
-
-    private function assertExpectedVersion(
-        ShiftSchedule $schedule,
-        int $expectedDraftVersion,
-    ): void {
-        $currentDraftVersion = (int) $schedule->draft_version;
-
-        if ($currentDraftVersion !== $expectedDraftVersion) {
-            throw new DraftVersionConflictException(
-                $expectedDraftVersion,
-                $currentDraftVersion,
-            );
-        }
-    }
-
-    private function assertIdempotentIdentity(
-        Shift $shift,
-        Store $store,
-        CarbonImmutable $targetMonth,
-        int $userId,
-        CarbonImmutable $workDate,
-        int $patternId,
-    ): void {
-        $schedule = $shift->schedule;
-        $matches = $schedule instanceof ShiftSchedule
-            && (int) $schedule->store_id === (int) $store->getKey()
-            && $schedule->target_month->toDateString() === $targetMonth->toDateString()
-            && (int) $shift->user_id === $userId
-            && $shift->work_date->toDateString() === $workDate->toDateString()
-            && (int) $shift->store_shift_pattern_id === $patternId;
-
-        if (! $matches) {
-            throw ValidationException::withMessages([
-                'entry_uuid' => 'この追加識別子は別のシフトで使用されています。',
-            ]);
-        }
-    }
-
-    private function markScheduleChanged(
-        ShiftSchedule $schedule,
-        User $actor,
-    ): ShiftSchedule {
-        $schedule->forceFill([
-            'draft_version' => (int) $schedule->draft_version + 1,
-            'shift_updated_at' => now((string) config('app.timezone', 'Asia/Tokyo')),
-            'updated_by' => $actor->getKey(),
-        ])->save();
-
-        return $schedule->refresh();
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function savedPayload(
-        Shift $shift,
-        ShiftSchedule $schedule,
-        bool $created,
-    ): array {
-        return [
-            ...$this->normalizeShift($shift),
-            'created' => $created,
-            ...$this->schedulePayload($schedule),
-        ];
-    }
-
-    /**
-     * @return array<string, int|string>
-     */
-    private function normalizeShift(Shift $shift): array
-    {
-        return [
-            'shift_id' => (int) $shift->getKey(),
-            'entry_uuid' => (string) $shift->entry_uuid,
-            'sequence' => (int) $shift->sequence,
-            'user_id' => (int) $shift->user_id,
-            'shift_date' => $shift->work_date->toDateString(),
-            'shift_pattern_id' => (int) $shift->store_shift_pattern_id,
-            'pattern_code' => (string) $shift->pattern_code,
-            'work_minutes' => (int) $shift->work_minutes,
-        ];
-    }
-
-    /**
-     * @return array<string, int|string|null>
-     */
-    private function schedulePayload(ShiftSchedule $schedule): array
-    {
-        return [
-            'shift_schedule_id' => (int) $schedule->getKey(),
-            'draft_version' => (int) $schedule->draft_version,
-            'saved_at' => $schedule->shift_updated_at?->toIso8601String(),
-            'save_status' => '保存済み',
-        ];
-    }
-
-    private function throwShiftNotFound(int $shiftId): never
-    {
-        throw (new ModelNotFoundException)->setModel(Shift::class, [$shiftId]);
     }
 
     private function isUniqueConstraintViolation(QueryException $exception): bool
