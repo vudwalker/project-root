@@ -124,9 +124,12 @@ UIは以下のコンテキストで分離する。
 6. `store_user`
 7. `store_shift_manager`
 8. `store_shift_patterns`
-9. `shift_schedules`
-10. `shifts`
-11. `published_shifts`
+9. `store_staffing_requirements`
+10. `store_staffing_requirement_options`
+11. `store_staffing_requirement_option_patterns`
+12. `shift_schedules`
+13. `shifts`
+14. `published_shifts`
 
 ### 3.2 Laravel標準テーブル
 
@@ -213,6 +216,7 @@ Organization
 
 - `disabled`
 - `fixed_total`
+- `pattern_combinations`
 
 制約：
 
@@ -222,22 +226,46 @@ Organization
 - `organization_id`は`organizations.id`への外部キー
 - `required_staff_count`は0以上
 - `fixed_total`の場合は`required_staff_count`を必須とする
+- `pattern_combinations`の場合は`required_staff_count`を使用しない
 - Soft Deleteを使用する
 
 人数チェック：
 
 - `disabled`
   - 人数判定を行わない
-  - 管理画面の判定欄は`－`表示
-  - 配布時の人数検証対象外
+  - 現行の`DraftShiftWarningService`では人数警告を返さない
 - `fixed_total`
-  - 日別の出勤人数と`required_staff_count`を比較
+  - DB上で`required_staff_count`を保持する
+  - 現行の`DraftShiftWarningService`では人数比較を行わない
+  - 人数警告を返さない
+  - 現行の初期店舗設定では使用しない
+- `pattern_combinations`
+  - 日別のシフトパターン別人数と、店舗別の必要配置を比較する
+  - 1つの必要配置に複数の選択肢がある場合は、いずれか1つを満たせば適合とする
   - 不一致の場合は不備とする
   - 配布時の検証対象とする
 
-同一スタッフが同日に同一店舗で2シフト連勤している場合も、出勤人数は1人として数える。
+`pattern_combinations`では、日別・シフトパターンコード別に
+重複しない`user_id`数を数える。
 
-人数チェックではシフト行数ではなく、日別の重複しない`user_id`数を数える。
+同一スタッフが同一勤務基準日に同じコードを複数持つ場合は1人として数え、
+異なるコードを持つ場合は各コードで1人として数える。
+
+現行の人数警告コード：
+
+- 不足：`staffing_shortage`
+- 超過：`staffing_excess`
+- 必要配置または利用可能な選択肢がない：`staffing_requirement_missing`
+
+これらはすべて`blocking`警告とする。
+
+正式な店舗別必要配置は次のとおりとし、これら4店舗は
+`staffing_check_mode = pattern_combinations`を使用する。
+
+- 大安寺：C 1人
+- 野田：C 1人
+- 岡山富田：C 1人
+- 西大寺：B 1人＋C 1人、またはD 1人
 
 リレーション：
 
@@ -247,6 +275,7 @@ Store
 ├── belongsToMany Users through store_user
 ├── belongsToMany ShiftManagers through store_shift_manager
 ├── hasMany StoreShiftPatterns
+├── hasMany StoreStaffingRequirements
 └── hasMany ShiftSchedules
 ```
 
@@ -479,7 +508,9 @@ staff
 
 ---
 
-## 11. store_shift_patterns
+## 11. 店舗別シフトパターンと必要配置
+
+### 11.1 store_shift_patterns
 
 店舗ごとのシフトパターンを管理する。
 
@@ -491,6 +522,10 @@ staff
 | store_id | bigint | 不可 | 店舗ID |
 | code | varchar(20) | 不可 | シフトコード |
 | work_minutes | integer | 不可 | 勤務時間数 |
+| start_time | time | 可 | 勤務開始時刻 |
+| start_day_offset | smallint | 可 | 勤務基準日から開始日までの日数 |
+| end_time | time | 可 | 勤務終了時刻 |
+| end_day_offset | smallint | 可 | 勤務基準日から終了日までの日数 |
 | display_order | integer | 不可 | 入力ボタンの表示順 |
 | is_active | boolean | 不可 | 現在使用可能か |
 | created_at | timestamp | 不可 | 作成日時 |
@@ -513,6 +548,9 @@ staff
 - `work_minutes`は0以上
 - `display_order`の初期値は`0`
 - `is_active`の初期値は`false`
+- 勤務時間帯の4項目はすべてNULL、またはすべて値ありとする
+- `start_day_offset`と`end_day_offset`は`0`または`1`とする
+- `start_day_offset`は`end_day_offset`以下とする
 - 入力ボタンには`is_active = true`のパターンだけを表示する
 - Soft Deleteを使用する
 - 使用済みパターンは物理削除しない
@@ -550,11 +588,107 @@ staff
 
 必要配置も店舗別に保持し、現在の初期設定は次のとおりとする。
 
-- 大安寺、野田、岡山富田：Cが1人
-- 西大寺：Bが1人かつCが1人、またはDが1人
+- 大安寺：C 1人
+- 野田：C 1人
+- 岡山富田：C 1人
+- 西大寺：B 1人＋C 1人、またはD 1人
 
 勤務時間帯と`work_minutes`は別の値として扱い、勤務時間帯から
 既存の`work_minutes`を自動更新しない。
+
+### 11.2 store_staffing_requirements
+
+店舗・勤務基準日ごとに適用する必要配置ルールを管理する。
+
+日付指定、曜日指定、全日共通のいずれかとして保持でき、
+有効期間内で対象日に適用されるルールを選択する。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| store_id | bigint | 不可 | 店舗ID |
+| work_date | date | 可 | 特定の勤務基準日 |
+| weekday | smallint | 可 | 曜日。0を日曜日、6を土曜日とする |
+| effective_from | date | 可 | 適用開始日 |
+| effective_to | date | 可 | 適用終了日 |
+| is_active | boolean | 不可 | 現在有効か |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+| deleted_at | timestamp | 可 | 論理削除日時 |
+
+制約：
+
+- `store_id`は`stores.id`への外部キー
+- 店舗を削除する場合も必要配置が存在すれば削除を拒否する
+- `work_date`と`weekday`を同時に設定しない
+- `weekday`は`0`から`6`までとする
+- `effective_to`は`effective_from`以降とする
+- `is_active`の初期値は`true`
+- Soft Deleteを使用する
+
+同一日に複数の有効なルールが該当する場合は、
+特定日、曜日、全日共通の順に優先する。
+
+同じ優先度では、`effective_from`が新しいルールを優先し、
+さらに同じ場合は新しいレコードを優先する。
+
+### 11.3 store_staffing_requirement_options
+
+1件の必要配置ルールを満たす選択肢を管理する。
+
+同じ必要配置ルールに複数の選択肢がある場合はOR条件とし、
+いずれか1つの選択肢を満たせば適合とする。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| store_staffing_requirement_id | bigint | 不可 | 必要配置ルールID |
+| code | varchar(50) | 不可 | 選択肢コード |
+| display_order | smallint | 不可 | 選択肢の表示・評価順 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+
+制約：
+
+- `store_staffing_requirement_id`は`store_staffing_requirements.id`への外部キー
+- 必要配置ルールを削除する場合は、その選択肢も削除する
+- `store_staffing_requirement_id + code`を一意にする
+- `display_order`は0以上とし、初期値は`0`とする
+
+### 11.4 store_staffing_requirement_option_patterns
+
+1つの必要配置選択肢に必要なシフトパターンと人数を管理する。
+
+同じ選択肢内の複数レコードはAND条件とする。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| id | bigint | 不可 | 主キー |
+| store_staffing_requirement_option_id | bigint | 不可 | 必要配置選択肢ID |
+| store_shift_pattern_id | bigint | 不可 | 店舗別シフトパターンID |
+| required_count | smallint | 不可 | 必要人数 |
+| created_at | timestamp | 不可 | 作成日時 |
+| updated_at | timestamp | 不可 | 更新日時 |
+
+制約：
+
+- `store_staffing_requirement_option_id`は`store_staffing_requirement_options.id`への外部キー
+- 必要配置選択肢を削除する場合は、そのパターン別人数も削除する
+- `store_shift_pattern_id`は`store_shift_patterns.id`への外部キー
+- 使用中の店舗別シフトパターンは削除を拒否する
+- `store_staffing_requirement_option_id + store_shift_pattern_id`を一意にする
+- `required_count`は0以上とする
+- 参照するシフトパターンは、必要配置ルールと同じ店舗のものに限る
+
+`pattern_combinations`の正式な初期データは次のように保持する。
+
+| 店舗 | 選択肢 | 必要パターン |
+|---|---|---|
+| 大安寺 | full-c | C 1人 |
+| 野田 | full-c | C 1人 |
+| 岡山富田 | full-c | C 1人 |
+| 西大寺 | split-b-c | B 1人＋C 1人 |
+| 西大寺 | full-d | D 1人 |
 
 ---
 
@@ -611,14 +745,15 @@ staff
 
 管理画面で編集する最新の下書きシフト。
 
-同一スタッフが同日・同一店舗で連続した複数シフトを持つことを許可する。
+同一スタッフが同一勤務基準日・同一店舗で複数シフトを持つことは
+DB上および下書き保存では許可するが、重複勤務として警告する。
 
 | カラム | 型 | NULL | 説明 |
 |---|---|---:|---|
 | id | bigint | 不可 | 主キー |
 | shift_schedule_id | bigint | 不可 | 店舗・対象月の管理レコード |
 | user_id | bigint | 不可 | スタッフID |
-| work_date | date | 不可 | 勤務日 |
+| work_date | date | 不可 | 勤務基準日 |
 | store_shift_pattern_id | bigint | 不可 | 店舗別シフトパターン |
 | sequence | smallint | 不可 | 同一セル内の表示順 |
 | entry_uuid | uuid | 不可 | 追加操作を一意に識別するUUID |
@@ -641,10 +776,10 @@ staff
 - 同日・同一店舗の複数シフトを許可する
 - 同一コードの複数シフトを許可する
 - 同日・異なる店舗への登録もDB上は許可する
-- 同日・異なる店舗への登録はアプリケーション側で警告する
-- 同日・異なる店舗の重複が残る場合は配布不可
+- 同一スタッフが同一勤務基準日に2件以上の下書きシフトを持つ場合は、店舗の同異を問わずアプリケーション側で警告する
+- 同一勤務基準日の重複勤務が残る場合は配布不可
 
-連続2シフトの例：
+同一セルに2シフトを保存できる例：
 
 | 店舗 | 日付 | スタッフ | コード | sequence |
 |---|---|---|---|---:|
@@ -655,12 +790,20 @@ staff
 
 ```text
 同一スタッフ
-かつ同一日
-かつ異なる店舗が2件以上
+かつ同一勤務基準日（work_date）
+かつ下書きシフトが2件以上
 → 重複勤務
 ```
 
-同一店舗内の連続2シフトは、重複勤務として扱わない。
+警告コード：
+
+- 関係する下書きシフトが同一店舗内だけの場合：`same_store_duplicate`
+- 関係する下書きシフトに異なる店舗を含む場合：`cross_store_duplicate`
+
+どちらも`blocking`警告とする。
+
+重複勤務があっても下書き保存は許可し、
+重複勤務が1件でも残っている場合は配布を許可しない。
 
 `pattern_code`と`work_minutes`には、シフト入力時点の店舗別シフトパターンを複写する。
 
@@ -764,7 +907,11 @@ staff
 13. 重複勤務を再判定
 14. 保存結果をJSONで返す
 
-同日・異なる店舗への登録がある場合も、下書き保存自体は許可する。
+同一スタッフ・同一勤務基準日の重複勤務がある場合も、
+同一店舗・異店舗を問わず下書き保存自体は許可する。
+
+保存後に`same_store_duplicate`または`cross_store_duplicate`を再判定し、
+`blocking`警告として返す。
 
 同一セルへの新規シフトは`sequence`の末尾へ追加する。
 
@@ -815,8 +962,8 @@ DB上の`draft_version`と一致しない場合は、無条件に上書きせず
 3. 店舗が`active`であることを確認
 4. 対象店舗・対象月の下書き取得
 5. 未保存変更がないことを確認
-6. 同一スタッフの同日複数店舗勤務を検証
-7. 人数チェックが有効な場合は固定人数を検証
+6. 同一スタッフの同一勤務基準日に2件以上の下書きシフトがないことを、店舗の同異を問わず検証
+7. `staffing_check_mode = pattern_combinations`の場合は必要シフトパターンの組み合わせを検証
 8. 不備があれば配布を中止
 9. 既存の`published_shifts`を削除
 10. 最新の`shifts`を`published_shifts`へコピー
@@ -826,7 +973,10 @@ DB上の`draft_version`と一致しない場合は、無条件に上書きせず
 
 強制配布機能は設けない。
 
-同一スタッフの同日複数店舗勤務が1件でも残っている場合は配布不可とする。
+`same_store_duplicate`または`cross_store_duplicate`が1件でも残っている場合は配布不可とする。
+
+`pattern_combinations`では、店舗別に登録された必要配置の選択肢を再検証し、
+いずれの選択肢も満たさない日が1日でもある場合は配布不可とする。
 
 配布後に下書きを変更した場合は、以下の状態になる。
 
@@ -862,6 +1012,7 @@ published_version < draft_version
 - `stores`
 - `users`
 - `store_shift_patterns`
+- `store_staffing_requirements`
 
 ### 17.3 物理削除
 
@@ -874,6 +1025,7 @@ published_version < draft_version
 - 所属履歴
 - 担当履歴
 - 配布記録
+- 必要配置ルール
 
 ---
 
@@ -919,6 +1071,20 @@ published_version < draft_version
 
 - `store_id + code`
 - `store_id + is_active + display_order`
+
+### store_staffing_requirements
+
+- `store_id + is_active + work_date`
+- `store_id + is_active + weekday`
+- `store_id + effective_from + effective_to`
+
+### store_staffing_requirement_options
+
+- `store_staffing_requirement_id + code`
+
+### store_staffing_requirement_option_patterns
+
+- `store_staffing_requirement_option_id + store_shift_pattern_id`
 
 ### shift_schedules
 
@@ -973,6 +1139,13 @@ Seederには以下を含める。
   - E
   - 研
   - 有
+- 店舗別シフトパターンの勤務時間帯
+- `staffing_check_mode = pattern_combinations`
+- 店舗別必要配置
+  - 大安寺：C 1人
+  - 野田：C 1人
+  - 岡山富田：C 1人
+  - 西大寺：B 1人＋C 1人、またはD 1人
 - 参考画像に対応する下書きシフト
 - 動作確認用の公開シフト
 - システム全体で重複しないダミーのメールアドレス
@@ -1007,7 +1180,10 @@ php artisan migrate:fresh --seed
 9. `shift_schedules`
 10. `shifts`
 11. `published_shifts`
-12. Laravel標準テーブル
+12. `store_staffing_requirements`
+13. `store_staffing_requirement_options`
+14. `store_staffing_requirement_option_patterns`
+15. Laravel標準テーブル
 
 既存Migrationがある場合は、新規作成前に内容と依存関係を確認する。
 
@@ -1080,8 +1256,10 @@ php artisan route:list
 - システム管理者が全ての`active`店舗のシフトを編集できる
 - 店舗ごとのシフトパターンを保持できる
 - 同じコードでも店舗ごとに勤務時間を変更できる
+- 店舗ごとのシフトパターンに勤務開始・終了時刻と日オフセットを保持できる
 - 無効なシフトパターンが入力ボタンに表示されない
-- 同日・同一店舗の連続2シフトを保存できる
+- 同一勤務基準日・同一店舗の複数シフトを下書き保存できる
+- 同一勤務基準日・同一店舗の2件以上を`same_store_duplicate`として検出できる
 - 同一コードを同一セルへ複数登録できる
 - 新規シフトを`sequence`の末尾へ追加できる
 - 各シフトを個別に削除できる
@@ -1090,11 +1268,18 @@ php artisan route:list
 - 意図的な追加ごとに異なる`entry_uuid`を登録できる
 - 再試行時に同じ`entry_uuid`を使用してもシフト行が増えない
 - 二重送信による意図しない重複登録を防止できる
-- 同日・異なる店舗のシフトをDB上に保存できる
-- 同日・異なる店舗の重複を検出できる
+- 同一勤務基準日・異なる店舗のシフトを下書き保存できる
+- 同一勤務基準日・異なる店舗の2件以上を`cross_store_duplicate`として検出できる
+- `same_store_duplicate`と`cross_store_duplicate`を`blocking`警告として扱える
 - 重複勤務が残る場合に配布不可と判定できる
-- 人数チェック無効時に`－`を表示できる
-- 人数チェックでスタッフ数を重複なしで集計できる
+- `disabled`では人数警告を返さない
+- `pattern_combinations`で日別・コード別のスタッフ数を重複なしで集計できる
+- `staffing_check_mode`で`disabled`、`fixed_total`、`pattern_combinations`を保持できる
+- `fixed_total`では現行の人数警告判定を行わない
+- 大安寺、野田、岡山富田でC 1人を必要配置として保持・判定できる
+- 西大寺でB 1人＋C 1人、またはD 1人を必要配置として保持・判定できる
+- `pattern_combinations`で複数選択肢のいずれかを満たせば適合と判定できる
+- 必要配置不備を`blocking`警告として扱える
 - 下書きと公開版が分離される
 - 配布後の編集が公開版へ即時反映されない
 - `published_version < draft_version`で再配布必要を判定できる
