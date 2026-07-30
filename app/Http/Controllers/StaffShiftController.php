@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\CalendarService;
-use App\Services\StaffShiftMockService;
+use App\Services\Staff\PublishedShiftReadService;
 use App\Services\TargetMonthService;
 use DateTimeImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -14,7 +15,7 @@ class StaffShiftController extends Controller
 {
     public function __construct(
         private readonly CalendarService $calendarService,
-        private readonly StaffShiftMockService $mockService,
+        private readonly PublishedShiftReadService $publishedShiftReadService,
         private readonly TargetMonthService $targetMonthService,
     ) {}
 
@@ -31,11 +32,17 @@ class StaffShiftController extends Controller
             );
         }
 
+        $user = $this->user($request);
+        $screen = $this->publishedShiftReadService->personalScreen(
+            $user,
+            $targetMonth['date'],
+        );
+
         return view('staff.top', [
             'calendar' => $this->calendarService->make($targetMonth['value'], $today),
-            'loginUser' => $this->loginUser($request),
-            'personalShifts' => $this->mockService->personalShifts(),
-            'stores' => $this->mockService->stores(),
+            'loginUser' => $this->loginUser($user),
+            'personalShifts' => $screen['personalShifts'],
+            'stores' => $screen['stores'],
             'today' => $today,
             'monthNavigation' => $this->targetMonthService->navigation(
                 $baseUrl,
@@ -52,16 +59,18 @@ class StaffShiftController extends Controller
 
     public function store(Request $request, string $store): View|RedirectResponse
     {
-        $stores = $this->mockService->stores();
-
-        if (! array_key_exists($store, $stores)) {
-            abort(404);
-        }
-
         $targetMonth = $this->targetMonthService->resolve($request);
         $today = $this->resolveToday($request);
         $query = $this->todayQuery($request);
         $baseUrl = route('staff.store', ['store' => $store]);
+        $user = $this->user($request);
+        $screen = $this->publishedShiftReadService->storeScreen(
+            $user,
+            $store,
+            $targetMonth['date'],
+        );
+
+        abort_if($screen === null, 404);
 
         if ($targetMonth['requires_canonical_redirect']) {
             return redirect()->to(
@@ -71,9 +80,9 @@ class StaffShiftController extends Controller
 
         return view('staff.store', [
             'calendar' => $this->calendarService->make($targetMonth['value'], $today),
-            'loginUser' => $this->loginUser($request),
-            'stores' => $stores,
-            'store' => $stores[$store],
+            'loginUser' => $this->loginUser($user),
+            'stores' => $screen['stores'],
+            'store' => $screen['store'],
             'storeCode' => $store,
             'today' => $today,
             'monthNavigation' => $this->targetMonthService->navigation(
@@ -123,10 +132,19 @@ class StaffShiftController extends Controller
     /**
      * @return array{name: string}
      */
-    private function loginUser(Request $request): array
+    private function loginUser(User $user): array
     {
         return [
-            'name' => (string) $request->user()?->name,
+            'name' => $user->name,
         ];
+    }
+
+    private function user(Request $request): User
+    {
+        $user = $request->user();
+
+        abort_unless($user instanceof User, 403);
+
+        return $user;
     }
 }
