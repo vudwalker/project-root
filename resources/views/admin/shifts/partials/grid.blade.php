@@ -94,11 +94,15 @@
                             data-user-id="{{ $cell['userId'] }}"
                             data-store-id="{{ $cell['storeId'] }}"
                             data-shift-date="{{ $day['date'] }}"
+                            data-cell-label="{{ $row['name'] }} {{ $day['date'] }}のシフトを編集"
+                            data-warning-codes="{{ implode(',', $cell['warningCodes']) }}"
                             @if ($screenType === 'store' && ! $screen['isReadOnly'])
                                 data-shift-editor-cell
                                 tabindex="0"
                                 role="button"
-                                aria-label="{{ $row['name'] }} {{ $day['date'] }}のシフトを編集"
+                                aria-label="{{ $row['name'] }} {{ $day['date'] }}のシフトを編集{{ $cell['isWarning'] ? '。警告：'.$cell['warningMessage'] : '' }}"
+                            @elseif ($cell['isWarning'])
+                                aria-label="警告：{{ $cell['warningMessage'] }}"
                             @endif
                         >
                             @foreach ($cell['shifts'] as $shift)
@@ -189,6 +193,7 @@
                             'is-warning' => $status['isWarning'],
                         ])
                         data-shift-date="{{ $day['date'] }}"
+                        data-admin-daily-status
                     >
                         @if ($status['active'])
                             <span aria-label="{{ $status['isWarning'] ? '確認不合格' : '確認済み' }}">

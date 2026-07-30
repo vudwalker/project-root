@@ -17,6 +17,10 @@ use Illuminate\Support\Collection as SupportCollection;
  */
 final class AdminDraftShiftReadService
 {
+    public function __construct(
+        private readonly DraftShiftWarningService $warningService,
+    ) {}
+
     /**
      * @return Collection<int, Store>
      */
@@ -136,15 +140,15 @@ final class AdminDraftShiftReadService
             ])
             ->first();
         $shifts = $schedule?->shifts ?? new Collection;
-        $warningDates = $isNg
-            ? $this->datesForDays($targetMonth, [10, 25])
-            : [];
+        $warningResult = $this->warningService->evaluate($store, $targetMonth);
+        $warnings = $warningResult['warnings'];
+        $warningDates = $this->warningDates($warnings);
         $rows = $this->makeStaffRows(
             $staffMembers,
             $store,
             $calendar,
             $shifts,
-            $warningDates,
+            $warnings,
         );
         $patterns = StoreShiftPattern::query()
             ->where('store_id', $store->getKey())
@@ -164,19 +168,20 @@ final class AdminDraftShiftReadService
             'contextStoreId' => (int) $store->getKey(),
             'contextStoreCode' => $store->code,
             'scheduleId' => $schedule?->getKey(),
+            'draftVersion' => (int) ($schedule?->draft_version ?? 0),
             'hasSchedule' => $schedule !== null,
             'hasStaff' => $staffMembers->isNotEmpty(),
             'emptyMessage' => $staffMembers->isEmpty() ? '所属スタッフがいません' : null,
             'isReadOnly' => ! $store->isActive(),
+            'hasBlockingWarnings' => $warningResult['blocking_warning_count'] > 0,
             'rows' => $rows,
             'dailyStatuses' => $this->makeDailyStatuses($calendar, $warningDates, true, $rows),
             'monthlyTotal' => $this->aggregateRows($rows),
             'patterns' => $patterns,
             'saveStatus' => $this->storeSaveStatus($schedule),
-            'publishStatus' => $this->storePublishStatus($schedule),
-            'warning' => $isNg
-                ? '修正が必要な下書きがあります。読み取り接続では警告状態を更新しません。'
-                : null,
+            'publishStatus' => $this->publishEligibilityLabel($warningResult),
+            'warning' => $this->warningSummary($warningResult),
+            'warningResult' => $warningResult,
         ];
     }
 
@@ -191,6 +196,13 @@ final class AdminDraftShiftReadService
         array $calendar,
         bool $isNg,
     ): array {
+        $warningResult = $this->warningService->evaluate(
+            $filterStore,
+            $targetMonth,
+        );
+        $warnings = $warningResult['warnings'];
+        $warningDates = $this->warningDates($warnings);
+
         if (! $staff) {
             return [
                 'contextName' => '所属スタッフなし',
@@ -199,12 +211,19 @@ final class AdminDraftShiftReadService
                 'hasStaff' => false,
                 'emptyMessage' => '所属スタッフがいません',
                 'isReadOnly' => true,
+                'hasBlockingWarnings' => $warningResult['blocking_warning_count'] > 0,
                 'rows' => [],
-                'dailyStatuses' => $this->makeDailyStatuses($calendar, [], false, []),
+                'dailyStatuses' => $this->makeDailyStatuses(
+                    $calendar,
+                    $warningDates,
+                    false,
+                    [],
+                ),
                 'monthlyTotal' => $this->emptyMonthlyTotal(),
                 'saveStatus' => '下書きシフトなし',
-                'publishStatus' => '閲覧専用',
-                'warning' => null,
+                'publishStatus' => $this->publishEligibilityLabel($warningResult),
+                'warning' => $this->warningSummary($warningResult),
+                'warningResult' => $warningResult,
             ];
         }
 
@@ -254,15 +273,12 @@ final class AdminDraftShiftReadService
                 $store->getKey(),
             ))
             ->values();
-        $warningDates = $isNg
-            ? $this->datesForDays($targetMonth, [22])
-            : [];
         $rows = $this->makeStoreRows(
             $stores,
             $staff,
             $calendar,
             $shifts,
-            $warningDates,
+            $warnings,
         );
 
         return [
@@ -272,14 +288,14 @@ final class AdminDraftShiftReadService
             'hasStaff' => true,
             'emptyMessage' => null,
             'isReadOnly' => true,
+            'hasBlockingWarnings' => $warningResult['blocking_warning_count'] > 0,
             'rows' => $rows,
             'dailyStatuses' => $this->makeDailyStatuses($calendar, $warningDates, false, $rows),
             'monthlyTotal' => $this->aggregateRows($rows),
             'saveStatus' => $this->staffSaveStatus($shifts),
-            'publishStatus' => '下書き表示・閲覧専用',
-            'warning' => $isNg
-                ? '修正が必要な下書きがあります。管理者用店舗別シフト編集画面で確認してください。'
-                : null,
+            'publishStatus' => $this->publishEligibilityLabel($warningResult),
+            'warning' => $this->warningSummary($warningResult),
+            'warningResult' => $warningResult,
         ];
     }
 
@@ -287,7 +303,7 @@ final class AdminDraftShiftReadService
      * @param  Collection<int, User>  $staffMembers
      * @param  array<string, mixed>  $calendar
      * @param  Collection<int, Shift>  $shifts
-     * @param  list<string>  $warningDates
+     * @param  list<array<string, mixed>>  $warnings
      * @return list<array<string, mixed>>
      */
     private function makeStaffRows(
@@ -295,7 +311,7 @@ final class AdminDraftShiftReadService
         Store $store,
         array $calendar,
         Collection $shifts,
-        array $warningDates,
+        array $warnings,
     ): array {
         $shiftsByCell = $shifts->groupBy(
             fn (Shift $shift): string => $shift->user_id.'|'.$shift->work_date->toDateString(),
@@ -306,7 +322,7 @@ final class AdminDraftShiftReadService
                 $store,
                 $calendar,
                 $shiftsByCell,
-                $warningDates,
+                $warnings,
             ): array {
                 $rowShifts = new Collection;
                 $cells = [];
@@ -322,7 +338,7 @@ final class AdminDraftShiftReadService
                         $staff->getKey(),
                         $store->getKey(),
                         $day['date'],
-                        $warningDates,
+                        $warnings,
                     );
                 }
 
@@ -343,7 +359,7 @@ final class AdminDraftShiftReadService
      * @param  SupportCollection<int, Store>  $stores
      * @param  array<string, mixed>  $calendar
      * @param  Collection<int, Shift>  $shifts
-     * @param  list<string>  $warningDates
+     * @param  list<array<string, mixed>>  $warnings
      * @return list<array<string, mixed>>
      */
     private function makeStoreRows(
@@ -351,7 +367,7 @@ final class AdminDraftShiftReadService
         User $staff,
         array $calendar,
         Collection $shifts,
-        array $warningDates,
+        array $warnings,
     ): array {
         $shiftsByCell = $shifts->groupBy(
             fn (Shift $shift): string => $shift->schedule->store_id.'|'.$shift->work_date->toDateString(),
@@ -362,7 +378,7 @@ final class AdminDraftShiftReadService
                 $staff,
                 $calendar,
                 $shiftsByCell,
-                $warningDates,
+                $warnings,
             ): array {
                 $rowShifts = new Collection;
                 $cells = [];
@@ -378,7 +394,7 @@ final class AdminDraftShiftReadService
                         $staff->getKey(),
                         $store->getKey(),
                         $day['date'],
-                        $warningDates,
+                        $warnings,
                     );
                 }
 
@@ -397,7 +413,7 @@ final class AdminDraftShiftReadService
 
     /**
      * @param  SupportCollection<int, Shift>  $shifts
-     * @param  list<string>  $warningDates
+     * @param  list<array<string, mixed>>  $warnings
      * @return array<string, mixed>
      */
     private function makeCell(
@@ -405,13 +421,34 @@ final class AdminDraftShiftReadService
         int $userId,
         int $storeId,
         string $shiftDate,
-        array $warningDates,
+        array $warnings,
     ): array {
         $orderedShifts = $shifts
             ->sortBy([
                 ['sequence', 'asc'],
                 ['id', 'asc'],
             ])
+            ->values();
+
+        $cellWarnings = collect($warnings)
+            ->filter(function (array $warning) use (
+                $userId,
+                $storeId,
+                $shiftDate,
+            ): bool {
+                if ($warning['work_date'] !== $shiftDate) {
+                    return false;
+                }
+
+                $storeIds = $warning['store_ids'] ?? [$warning['store_id'] ?? null];
+
+                if (! in_array($storeId, $storeIds, true)) {
+                    return false;
+                }
+
+                return ! isset($warning['user_id'])
+                    || (int) $warning['user_id'] === $userId;
+            })
             ->values();
 
         return [
@@ -432,7 +469,9 @@ final class AdminDraftShiftReadService
                     'workMinutes' => (int) $shift->work_minutes,
                 ])
                 ->all(),
-            'isWarning' => in_array($shiftDate, $warningDates, true),
+            'isWarning' => $cellWarnings->isNotEmpty(),
+            'warningCodes' => $cellWarnings->pluck('warning_code')->unique()->all(),
+            'warningMessage' => $cellWarnings->pluck('message')->implode(' '),
         ];
     }
 
@@ -530,16 +569,47 @@ final class AdminDraftShiftReadService
     }
 
     /**
-     * @param  list<int>  $days
+     * @param  list<array<string, mixed>>  $warnings
      * @return list<string>
      */
-    private function datesForDays(CarbonImmutable $targetMonth, array $days): array
+    private function warningDates(array $warnings): array
     {
-        return collect($days)
-            ->filter(fn (int $day): bool => $day <= $targetMonth->daysInMonth)
-            ->map(fn (int $day): string => $targetMonth->setDay($day)->toDateString())
+        return collect($warnings)
+            ->pluck('work_date')
+            ->filter(fn (mixed $date): bool => is_string($date))
+            ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $warningResult
+     */
+    private function publishEligibilityLabel(array $warningResult): string
+    {
+        if ($warningResult['can_publish']) {
+            return '配布可能';
+        }
+
+        return sprintf(
+            '配布不可（警告%d件）',
+            $warningResult['blocking_warning_count'],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $warningResult
+     */
+    private function warningSummary(array $warningResult): ?string
+    {
+        if ($warningResult['can_publish']) {
+            return null;
+        }
+
+        return sprintf(
+            '下書きに配布を止める警告が%d件あります。',
+            $warningResult['blocking_warning_count'],
+        );
     }
 
     private function storeSaveStatus(?ShiftSchedule $schedule): string
@@ -553,17 +623,6 @@ final class AdminDraftShiftReadService
         }
 
         return '最終更新 '.$schedule->shift_updated_at->format('n月j日 H:i');
-    }
-
-    private function storePublishStatus(?ShiftSchedule $schedule): string
-    {
-        if (! $schedule || $schedule->published_version === null) {
-            return '未配布';
-        }
-
-        return $schedule->published_version === $schedule->draft_version
-            ? '配布済み'
-            : '再配布が必要';
     }
 
     /**

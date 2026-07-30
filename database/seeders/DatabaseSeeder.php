@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             OrganizationStoreSeeder::class,
             RoleUserSeeder::class,
             ShiftPatternSeeder::class,
+            StaffingRequirementSeeder::class,
             PublishedShiftSeeder::class,
             ConflictingDraftShiftSeeder::class,
         ]);

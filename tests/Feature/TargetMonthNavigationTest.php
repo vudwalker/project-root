@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Role;
+use App\Models\Store;
 use App\Models\User;
 use App\Services\TargetMonthService;
 use Carbon\CarbonImmutable;
@@ -27,9 +29,19 @@ class TargetMonthNavigationTest extends TestCase
             CarbonImmutable::create(2026, 7, 30, 12, 0, 0, 'Asia/Tokyo'),
         );
         $this->seed(DatabaseSeeder::class);
-        $this->actingAs(
-            User::query()->where('email', 'admin@example.com')->firstOrFail(),
-        );
+        $admin = User::query()->where('email', 'admin@example.com')->firstOrFail();
+        $admin->roles()->syncWithoutDetaching([
+            Role::query()->where('code', 'staff')->firstOrFail()->getKey(),
+        ]);
+        $admin->stores()->syncWithoutDetaching([
+            Store::query()->where('code', 'daianji')->firstOrFail()->getKey() => [
+                'display_order' => 99,
+                'is_active' => true,
+                'started_on' => null,
+                'ended_on' => null,
+            ],
+        ]);
+        $this->actingAs($admin);
         $staff = User::query()->where('email', 'staff@example.com')->firstOrFail();
         $this->screens = [
             ['path' => '/staff', 'query' => []],

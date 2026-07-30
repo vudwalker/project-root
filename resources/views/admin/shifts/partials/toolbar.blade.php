@@ -123,7 +123,13 @@
         </a>
     </nav>
 
-    <div @class(['admin-screen-status', 'is-warning' => $isNg]) role="{{ $isNg ? 'alert' : 'status' }}">
+    <div
+        @class([
+            'admin-screen-status',
+            'is-warning' => $screen['hasBlockingWarnings'],
+        ])
+        role="{{ $screen['hasBlockingWarnings'] ? 'alert' : 'status' }}"
+    >
         @if ($screen['warning'])
             <strong>修正が必要：</strong>{{ $screen['warning'] }}
         @else

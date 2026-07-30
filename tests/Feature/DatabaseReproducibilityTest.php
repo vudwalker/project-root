@@ -31,6 +31,9 @@ class DatabaseReproducibilityTest extends TestCase
             'store_user',
             'store_shift_manager',
             'store_shift_patterns',
+            'store_staffing_requirements',
+            'store_staffing_requirement_options',
+            'store_staffing_requirement_option_patterns',
             'shift_schedules',
             'shifts',
             'published_shifts',
@@ -59,6 +62,20 @@ class DatabaseReproducibilityTest extends TestCase
             'pattern_code',
             'work_minutes',
         ]));
+        $this->assertTrue(Schema::hasColumns('store_shift_patterns', [
+            'start_time',
+            'start_day_offset',
+            'end_time',
+            'end_day_offset',
+        ]));
+        $this->assertTrue(Schema::hasColumns('store_staffing_requirements', [
+            'store_id',
+            'work_date',
+            'weekday',
+            'effective_from',
+            'effective_to',
+            'is_active',
+        ]));
     }
 
     public function test_seeders_are_idempotent_and_keep_conflicting_drafts_unpublished(): void
@@ -71,6 +88,12 @@ class DatabaseReproducibilityTest extends TestCase
         $this->assertSame(13, User::query()->count());
         $this->assertSame(69, Shift::query()->count());
         $this->assertSame(31, PublishedShift::query()->count());
+        $this->assertSame(4, DB::table('store_staffing_requirements')->count());
+        $this->assertSame(5, DB::table('store_staffing_requirement_options')->count());
+        $this->assertSame(
+            6,
+            DB::table('store_staffing_requirement_option_patterns')->count(),
+        );
 
         $this->assertDatabaseHas('organizations', [
             'code' => 'sample-company',
@@ -79,6 +102,7 @@ class DatabaseReproducibilityTest extends TestCase
         $this->assertDatabaseHas('stores', [
             'code' => 'okayama-tomida',
             'name' => '岡山富田',
+            'staffing_check_mode' => 'pattern_combinations',
         ]);
 
         $schedules = ShiftSchedule::query()

@@ -59,6 +59,11 @@ class Store extends Model
         return $this->hasMany(ShiftSchedule::class);
     }
 
+    public function staffingRequirements(): HasMany
+    {
+        return $this->hasMany(StoreStaffingRequirement::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';

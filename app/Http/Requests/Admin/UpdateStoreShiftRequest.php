@@ -27,6 +27,12 @@ final class UpdateStoreShiftRequest extends FormRequest
                 'date_format:Y-m',
                 new SelectableTargetMonth(app(TargetMonthService::class)),
             ],
+            'expected_draft_version' => [
+                'bail',
+                'required',
+                'integer',
+                'min:0',
+            ],
             'shift_pattern_id' => [
                 'bail',
                 'required',

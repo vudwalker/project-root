@@ -44,7 +44,7 @@
      * 将来の自動保存処理と月移動を安全に接続するための状態契約です。
      *
      * 自動保存側は `admin-shift:autosave-state` を次のdetailで通知します。
-     * { state: 'pending'|'saving'|'saved'|'failed', month: 'YYYY-MM' }
+     * { state: 'pending'|'saving'|'saved'|'failed'|'conflict', month: 'YYYY-MM' }
      *
      * 保存待ちで月移動が要求された場合、この処理は
      * `admin-shift:autosave-flush-request` を通知します。
@@ -91,7 +91,14 @@
                 return;
             }
 
-            if (!['pending', 'saving', 'saved', 'failed', 'idle'].includes(detail.state)) {
+            if (![
+                'pending',
+                'saving',
+                'saved',
+                'failed',
+                'conflict',
+                'idle',
+            ].includes(detail.state)) {
                 return;
             }
 
@@ -113,6 +120,16 @@
                 pendingDestination = null;
                 setNavigationDisabled(false);
                 showError('保存に失敗したため、対象月を変更していません。入力内容を確認してください。');
+
+                return;
+            }
+
+            if (saveState === 'conflict') {
+                pendingDestination = null;
+                setNavigationDisabled(true);
+                showError(
+                    '別の画面で更新されました。再読み込みするまで対象月や店舗を変更できません。',
+                );
 
                 return;
             }
@@ -140,6 +157,12 @@
 
             if (saveState === 'failed') {
                 showError('保存に失敗しているため、対象月を変更できません。');
+
+                return;
+            }
+
+            if (saveState === 'conflict') {
+                showError('競合を解消するため、画面内の「再読み込み」を使用してください。');
 
                 return;
             }

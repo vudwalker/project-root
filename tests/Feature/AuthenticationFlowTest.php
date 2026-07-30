@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Organization;
 use App\Models\PublishedShift;
+use App\Models\Role;
 use App\Models\Shift;
 use App\Models\ShiftSchedule;
 use App\Models\Store;
@@ -253,6 +254,17 @@ class AuthenticationFlowTest extends TestCase
             ->assertOk();
 
         $managerAndStaff = $this->user('manager@example.com');
+        $managerAndStaff->roles()->syncWithoutDetaching([
+            Role::query()->where('code', 'staff')->firstOrFail()->getKey(),
+        ]);
+        $managerAndStaff->stores()->syncWithoutDetaching([
+            Store::query()->where('code', 'daianji')->firstOrFail()->getKey() => [
+                'display_order' => 99,
+                'is_active' => true,
+                'started_on' => null,
+                'ended_on' => null,
+            ],
+        ]);
         $this->actingAs($managerAndStaff)
             ->get('/staff?month=2026-07')
             ->assertOk();
@@ -330,18 +342,16 @@ class AuthenticationFlowTest extends TestCase
         $this->get('/staff?month=2026-07')->assertRedirect('/login');
     }
 
-    public function test_development_seeder_has_explicit_role_combinations_and_optional_password(): void
+    public function test_development_seeder_keeps_management_accounts_out_of_staff_memberships(): void
     {
         $this->assertSame(['staff'], $this->roleCodes('staff@example.com'));
         $this->assertSame(['shift_manager'], $this->roleCodes('manager-only@example.com'));
-        $this->assertSame(
-            ['shift_manager', 'staff'],
-            $this->roleCodes('manager@example.com'),
-        );
-        $this->assertSame(
-            ['staff', 'system_admin'],
-            $this->roleCodes('admin@example.com'),
-        );
+        $this->assertSame(['shift_manager'], $this->roleCodes('manager@example.com'));
+        $this->assertSame(['system_admin'], $this->roleCodes('admin@example.com'));
+        $this->assertNull($this->user('manager@example.com')->primary_store_id);
+        $this->assertNull($this->user('admin@example.com')->primary_store_id);
+        $this->assertFalse($this->user('manager@example.com')->stores()->exists());
+        $this->assertFalse($this->user('admin@example.com')->stores()->exists());
         $this->assertSame('retired', $this->user('inactive@example.com')->status);
 
         config()->set('development.login_password', $this->password);

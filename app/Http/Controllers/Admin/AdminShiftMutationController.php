@@ -9,6 +9,7 @@ use App\Http\Requests\Admin\UpdateStoreShiftRequest;
 use App\Models\Store;
 use App\Models\User;
 use App\Services\Admin\AdminShiftWriteService;
+use App\Services\Admin\DraftShiftWarningService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ final class AdminShiftMutationController extends Controller
 {
     public function __construct(
         private readonly AdminShiftWriteService $writeService,
+        private readonly DraftShiftWarningService $warningService,
     ) {}
 
     public function store(StoreShiftRequest $request, string $store): JsonResponse
@@ -41,9 +43,13 @@ final class AdminShiftMutationController extends Controller
             $workDate,
             (int) $request->validated('shift_pattern_id'),
             (string) $request->validated('entry_uuid'),
+            (int) $request->validated('expected_draft_version'),
         );
 
-        return response()->json($payload, $payload['created'] ? 201 : 200);
+        return response()->json(
+            $this->withWarnings($payload, $targetStore, $targetMonth),
+            $payload['created'] ? 201 : 200,
+        );
     }
 
     public function update(
@@ -57,14 +63,17 @@ final class AdminShiftMutationController extends Controller
 
         abort_unless($targetMonth instanceof CarbonImmutable, 422);
 
+        $payload = $this->writeService->update(
+            $targetStore,
+            $actor,
+            $targetMonth,
+            $this->shiftId($shift),
+            (int) $request->validated('shift_pattern_id'),
+            (int) $request->validated('expected_draft_version'),
+        );
+
         return response()->json(
-            $this->writeService->update(
-                $targetStore,
-                $actor,
-                $targetMonth,
-                $this->shiftId($shift),
-                (int) $request->validated('shift_pattern_id'),
-            ),
+            $this->withWarnings($payload, $targetStore, $targetMonth),
         );
     }
 
@@ -79,14 +88,35 @@ final class AdminShiftMutationController extends Controller
 
         abort_unless($targetMonth instanceof CarbonImmutable, 422);
 
-        return response()->json(
-            $this->writeService->delete(
-                $targetStore,
-                $actor,
-                $targetMonth,
-                $this->shiftId($shift),
-            ),
+        $payload = $this->writeService->delete(
+            $targetStore,
+            $actor,
+            $targetMonth,
+            $this->shiftId($shift),
+            (int) $request->validated('expected_draft_version'),
         );
+
+        return response()->json(
+            $this->withWarnings($payload, $targetStore, $targetMonth),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function withWarnings(
+        array $payload,
+        Store $store,
+        CarbonImmutable $targetMonth,
+    ): array {
+        return [
+            ...$payload,
+            'warning_result' => $this->warningService->evaluate(
+                $store,
+                $targetMonth,
+            ),
+        ];
     }
 
     private function actor(Request $request): User

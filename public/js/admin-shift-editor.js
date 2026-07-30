@@ -16,25 +16,47 @@
     const initialSaveStatus = saveStatus?.textContent || '未変更';
     const modeStatus = editor.querySelector('[data-shift-mode-status]');
     const modeButtons = Array.from(editor.querySelectorAll('[data-shift-mode]'));
+    const conflictNotice = editor.querySelector('[data-admin-conflict-notice]');
+    const conflictReload = editor.querySelector('[data-admin-conflict-reload]');
+    const warningPanel = editor.querySelector('[data-admin-warning-panel]');
+    const warningList = editor.querySelector('[data-admin-warning-list]');
+    const warningCount = editor.querySelector('[data-admin-warning-count]');
+    const publishEligibility = editor.querySelector(
+        '[data-admin-publish-eligibility]',
+    );
+    let draftVersion = parseDraftVersion(editor.dataset.draftVersion);
     let selectedMode = null;
+    let allowConflictReload = false;
 
-    if (!csrfToken || !createUrl || !shiftUrlTemplate || !targetMonth) {
+    if (
+        !csrfToken
+        || !createUrl
+        || !shiftUrlTemplate
+        || !targetMonth
+        || draftVersion === null
+    ) {
         return;
     }
 
     const queue = createAutosaveQueue({
         debounceMs: DEBOUNCE_MS,
         onStateChange: updateSaveState,
+        onConflict: enterConflictState,
     });
 
     setupModeSelection();
     setupGridEditing();
     setupNavigationFlush();
     setupBeforeUnload();
+    setupConflictRecovery();
 
     function setupModeSelection() {
         modeButtons.forEach((button) => {
             button.addEventListener('click', () => {
+                if (queue.isStopped()) {
+                    return;
+                }
+
                 const isCurrent = button.getAttribute('aria-pressed') === 'true';
 
                 modeButtons.forEach((candidate) => {
@@ -94,6 +116,10 @@
     }
 
     function handleGridAction(target) {
+        if (queue.isStopped()) {
+            return;
+        }
+
         const cell = target.closest('[data-shift-editor-cell]');
 
         if (!cell || !selectedMode) {
@@ -175,6 +201,7 @@
                 }
 
                 updateScheduleIdentity(payload);
+                applyWarningResult(payload.warning_result);
                 markElementState(shift, 'saved');
                 recalculateSummaries();
             },
@@ -200,6 +227,7 @@
                 shift.remove();
                 applyRemainingSequences(payload.remaining_shifts || []);
                 updateScheduleIdentity(payload);
+                applyWarningResult(payload.warning_result);
                 recalculateSummaries();
             },
             onFailure: (message) => markElementState(shift, 'failed', message),
@@ -213,6 +241,7 @@
                 body: {
                     target_month: targetMonth,
                     shift_pattern_id: patternId,
+                    expected_draft_version: draftVersion,
                 },
             });
         }
@@ -225,6 +254,7 @@
                 work_date: shift.dataset.shiftDate,
                 shift_pattern_id: patternId,
                 entry_uuid: shift.dataset.entryUuid,
+                expected_draft_version: draftVersion,
             },
         });
     }
@@ -244,6 +274,7 @@
             method: 'DELETE',
             body: {
                 target_month: targetMonth,
+                expected_draft_version: draftVersion,
             },
         });
     }
@@ -287,6 +318,14 @@
             );
         }
 
+        if (response.status === 409) {
+            throw new ConflictError(
+                payload.message
+                    || '別の画面で更新されました。再読み込みしてください。',
+                payload,
+            );
+        }
+
         if (response.status === 403) {
             throw new RequestError('この店舗のシフトは変更できません。');
         }
@@ -298,70 +337,115 @@
         throw new RequestError('保存できませんでした。時間をおいて再試行してください。');
     }
 
-    function createAutosaveQueue({debounceMs, onStateChange}) {
+    function createAutosaveQueue({debounceMs, onStateChange, onConflict}) {
         const items = new Map();
         let hasCompletedSave = false;
+        let networkBusy = false;
+        let stopped = false;
+        let nextOperationId = 1;
+        let lastAppliedOperationId = 0;
 
         function enqueue(key, operation) {
+            if (stopped) {
+                return;
+            }
+
             const item = items.get(key) || {
                 pending: null,
                 saving: false,
                 failed: false,
                 timer: null,
+                ready: false,
             };
 
             if (item.timer) {
                 window.clearTimeout(item.timer);
             }
 
-            item.pending = operation;
+            item.pending = {
+                ...operation,
+                operationId: nextOperationId++,
+            };
             item.failed = false;
+            item.ready = false;
             item.timer = window.setTimeout(() => {
                 item.timer = null;
-                drain(key);
+                item.ready = true;
+                drainNext();
             }, debounceMs);
             items.set(key, item);
             markElementState(operation.element, 'pending');
             publishState();
         }
 
-        async function drain(key) {
-            const item = items.get(key);
-
-            if (!item || item.saving || !item.pending) {
+        async function drainNext() {
+            if (networkBusy || stopped) {
                 return;
             }
 
+            const next = Array.from(items.entries())
+                .filter(([, item]) => item.ready && !item.saving && item.pending)
+                .sort(
+                    ([, left], [, right]) => left.pending.operationId
+                        - right.pending.operationId,
+                )
+                .at(0);
+
+            if (!next) {
+                return;
+            }
+
+            const [key, item] = next;
             const operation = item.pending;
 
             item.pending = null;
+            item.ready = false;
             item.saving = true;
             item.failed = false;
+            networkBusy = true;
             markElementState(operation.element, 'saving');
             publishState();
 
             try {
                 const payload = await operation.execute();
 
+                if (stopped || operation.operationId <= lastAppliedOperationId) {
+                    item.saving = false;
+                    networkBusy = false;
+                    publishState();
+
+                    return;
+                }
+
+                lastAppliedOperationId = operation.operationId;
                 operation.onSuccess(payload);
                 item.saving = false;
+                networkBusy = false;
                 hasCompletedSave = true;
 
                 if (item.pending) {
                     publishState();
-                    drain(key);
+                    drainNext();
 
                     return;
                 }
 
                 items.delete(key);
                 publishState();
+                drainNext();
             } catch (error) {
                 item.saving = false;
+                networkBusy = false;
+
+                if (error instanceof ConflictError) {
+                    stopForConflict(error);
+
+                    return;
+                }
 
                 if (item.pending) {
                     publishState();
-                    drain(key);
+                    drainNext();
 
                     return;
                 }
@@ -372,7 +456,22 @@
                     : '保存できませんでした。';
                 operation.onFailure(item.failedMessage);
                 publishState();
+                drainNext();
             }
+        }
+
+        function stopForConflict(error) {
+            stopped = true;
+            items.forEach((item) => {
+                if (item.timer) {
+                    window.clearTimeout(item.timer);
+                    item.timer = null;
+                }
+
+                item.ready = false;
+            });
+            onConflict(error.message, error.payload);
+            publishState();
         }
 
         function cancelPending(key) {
@@ -388,6 +487,7 @@
 
             items.delete(key);
             publishState();
+            drainNext();
 
             return true;
         }
@@ -400,14 +500,19 @@
                 }
 
                 if (item.pending && !item.saving) {
-                    drain(key);
+                    item.ready = true;
                 }
             });
 
             publishState();
+            drainNext();
         }
 
         function state() {
+            if (stopped) {
+                return 'conflict';
+            }
+
             if (Array.from(items.values()).some((item) => item.failed)) {
                 return 'failed';
             }
@@ -435,7 +540,8 @@
             enqueue,
             cancelPending,
             flush,
-            hasUnsaved: () => items.size > 0,
+            hasUnsaved: () => stopped || items.size > 0,
+            isStopped: () => stopped,
         };
     }
 
@@ -446,12 +552,15 @@
             saving: '保存中',
             saved: '保存済み',
             failed: '保存失敗',
+            conflict: '競合',
         };
 
         if (saveStatus) {
             saveStatus.dataset.saveState = state;
             saveStatus.textContent = labels[state];
-            saveStatus.title = state === 'failed' ? failedMessage : '';
+            saveStatus.title = ['failed', 'conflict'].includes(state)
+                ? failedMessage
+                : '';
         }
 
         document.dispatchEvent(new CustomEvent('admin-shift:autosave-state', {
@@ -475,7 +584,7 @@
 
     function setupBeforeUnload() {
         window.addEventListener('beforeunload', (event) => {
-            if (!queue.hasUnsaved()) {
+            if (allowConflictReload || !queue.hasUnsaved()) {
                 return;
             }
 
@@ -499,6 +608,213 @@
     function updateScheduleIdentity(payload) {
         if (payload.shift_schedule_id) {
             editor.dataset.shiftScheduleId = String(payload.shift_schedule_id);
+        }
+
+        const responseVersion = parseDraftVersion(payload.draft_version);
+
+        // 正常応答でも、保持中のバージョンを巻き戻す値は適用しません。
+        if (responseVersion !== null && responseVersion >= draftVersion) {
+            draftVersion = responseVersion;
+            editor.dataset.draftVersion = String(responseVersion);
+        }
+    }
+
+    function applyWarningResult(result) {
+        if (!result || queue.isStopped()) {
+            return;
+        }
+
+        const checkedVersion = parseDraftVersion(result.checked_draft_version);
+
+        // 保存済み下書きと同じ版を検査した警告だけを現在のDOMへ適用します。
+        if (checkedVersion === null || checkedVersion !== draftVersion) {
+            return;
+        }
+
+        const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+        const cells = Array.from(editor.querySelectorAll(
+            '.admin-shift-grid__shift-cell[data-user-id][data-store-id][data-shift-date]',
+        ));
+        const warningsByCell = new Map();
+
+        cells.forEach((cell) => {
+            cell.classList.remove('is-warning');
+            cell.dataset.warningCodes = '';
+            const baseLabel = cell.dataset.cellLabel;
+
+            if (baseLabel) {
+                cell.setAttribute('aria-label', baseLabel);
+            }
+        });
+
+        warnings.forEach((warning) => {
+            cells
+                .filter((cell) => warningMatchesCell(warning, cell))
+                .forEach((cell) => {
+                    const cellWarnings = warningsByCell.get(cell) || [];
+
+                    cellWarnings.push(warning);
+                    warningsByCell.set(cell, cellWarnings);
+                });
+        });
+
+        warningsByCell.forEach((cellWarnings, cell) => {
+            const codes = Array.from(new Set(
+                cellWarnings.map((warning) => warning.warning_code),
+            ));
+            const messages = cellWarnings
+                .map((warning) => warning.message)
+                .filter((message) => typeof message === 'string');
+
+            cell.classList.add('is-warning');
+            cell.dataset.warningCodes = codes.join(',');
+            cell.setAttribute(
+                'aria-label',
+                `${cell.dataset.cellLabel || ''}。警告：${messages.join(' ')}`,
+            );
+        });
+
+        updateDailyWarningStatuses(warnings);
+        renderWarningPanel(result, warnings);
+    }
+
+    function warningMatchesCell(warning, cell) {
+        if (warning.work_date !== cell.dataset.shiftDate) {
+            return false;
+        }
+
+        const storeIds = Array.isArray(warning.store_ids)
+            ? warning.store_ids.map(String)
+            : [String(warning.store_id || '')];
+
+        if (!storeIds.includes(cell.dataset.storeId)) {
+            return false;
+        }
+
+        return warning.user_id === undefined
+            || String(warning.user_id) === cell.dataset.userId;
+    }
+
+    function updateDailyWarningStatuses(warnings) {
+        editor.querySelectorAll('[data-admin-daily-status]').forEach((status) => {
+            const hasWarning = warnings.some(
+                (warning) => warning.work_date === status.dataset.shiftDate,
+            );
+            const mark = status.querySelector('span');
+
+            status.classList.add('is-active');
+            status.classList.toggle('is-warning', hasWarning);
+
+            if (mark) {
+                mark.textContent = hasWarning ? '×' : '○';
+                mark.setAttribute(
+                    'aria-label',
+                    hasWarning ? '確認不合格' : '確認済み',
+                );
+            }
+        });
+    }
+
+    function renderWarningPanel(result, warnings) {
+        const canPublish = result.can_publish === true;
+        const count = Number(result.blocking_warning_count) || 0;
+
+        if (warningPanel) {
+            warningPanel.classList.toggle('is-clear', canPublish);
+            warningPanel.dataset.checkedDraftVersion = String(
+                result.checked_draft_version,
+            );
+        }
+
+        if (publishEligibility) {
+            publishEligibility.textContent = canPublish ? '配布可能' : '配布不可';
+        }
+
+        if (warningCount) {
+            warningCount.textContent = `警告 ${count}件`;
+        }
+
+        if (warningList) {
+            warningList.replaceChildren();
+            warningList.hidden = warnings.length === 0;
+
+            warnings.forEach((warning) => {
+                const item = document.createElement('li');
+                const icon = document.createElement('span');
+
+                item.dataset.warningCode = warning.warning_code || '';
+                item.dataset.warningDate = warning.work_date || '';
+                item.setAttribute(
+                    'aria-label',
+                    `警告：${warning.message || ''}`,
+                );
+                icon.setAttribute('aria-hidden', 'true');
+                icon.textContent = '⚠';
+                item.append(icon, document.createTextNode(
+                    ` ${warning.message || ''}`,
+                ));
+                warningList.appendChild(item);
+            });
+        }
+
+        const publishNote = editor.querySelector('.admin-publish-note');
+
+        if (publishNote) {
+            publishNote.textContent = canPublish
+                ? '配布可能'
+                : `配布不可（警告${count}件）`;
+            publishNote.classList.toggle('is-warning', !canPublish);
+        }
+
+        const publishButton = editor.querySelector('.admin-publish-button');
+
+        if (publishButton) {
+            publishButton.title = canPublish
+                ? '配布処理は次の段階で実装します'
+                : '警告を解消するまで配布できません';
+        }
+    }
+
+    function setupConflictRecovery() {
+        conflictReload?.addEventListener('click', () => {
+            const confirmed = window.confirm(
+                '再読み込みすると、この画面に残っている未保存の入力は失われます。'
+                + '最新のシフトを読み込みますか？',
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            allowConflictReload = true;
+            window.location.reload();
+        });
+    }
+
+    function enterConflictState(message) {
+        editor.dataset.conflictState = 'true';
+        selectedMode = null;
+        modeButtons.forEach((button) => {
+            button.disabled = true;
+            button.classList.remove('is-selected');
+            button.setAttribute('aria-pressed', 'false');
+        });
+        editor.querySelectorAll(
+            '[data-shift-editor-cell], .admin-shift-grid__shift-code',
+        ).forEach((element) => {
+            element.setAttribute('aria-disabled', 'true');
+            element.tabIndex = -1;
+        });
+        setModeStatus('競合のため編集停止');
+
+        if (conflictNotice) {
+            const description = conflictNotice.querySelector('span');
+
+            if (description && message) {
+                description.textContent = message;
+            }
+
+            conflictNotice.hidden = false;
         }
     }
 
@@ -658,5 +974,18 @@
         ].join('-');
     }
 
+    function parseDraftVersion(value) {
+        const version = Number(value);
+
+        return Number.isSafeInteger(version) && version >= 0 ? version : null;
+    }
+
     class RequestError extends Error {}
+
+    class ConflictError extends RequestError {
+        constructor(message, payload) {
+            super(message);
+            this.payload = payload;
+        }
+    }
 })();

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Organization;
 use App\Models\PublishedShift;
+use App\Models\Role;
 use App\Models\Shift;
 use App\Models\ShiftSchedule;
 use App\Models\Store;
@@ -100,8 +101,17 @@ class AdminDraftShiftReadTest extends TestCase
 
     public function test_staff_role_controls_display_even_when_admin_roles_are_also_present(): void
     {
-        $manager = $this->staff('manager@example.com');
-        $systemAdmin = $this->staff('admin@example.com');
+        $staffManager = $this->staff('otsuki@example.com');
+        $staffSystemAdmin = $this->staff('fujimoto@example.com');
+        $staffManager->roles()->syncWithoutDetaching([
+            Role::query()->where('code', 'shift_manager')->firstOrFail()->getKey(),
+        ]);
+        $staffSystemAdmin->roles()->syncWithoutDetaching([
+            Role::query()->where('code', 'system_admin')->firstOrFail()->getKey(),
+        ]);
+
+        $managementOnlyManager = $this->staff('manager@example.com');
+        $managementOnlySystemAdmin = $this->staff('admin@example.com');
         $managerOnly = $this->staff('manager-only@example.com');
         $managerOnly->stores()->syncWithoutDetaching([
             $this->store('daianji')->getKey() => [
@@ -112,24 +122,34 @@ class AdminDraftShiftReadTest extends TestCase
             ],
         ]);
 
-        $response = $this->actingAs($systemAdmin)
+        $response = $this->actingAs($managementOnlySystemAdmin)
             ->get('/admin/shifts/stores/daianji?month=2026-07')
             ->assertOk();
 
+        $rows = collect($response->viewData('screen')['rows']);
+
+        $this->assertSame(1, $rows->where('userId', $staffManager->getKey())->count());
+        $this->assertSame(1, $rows->where('userId', $staffSystemAdmin->getKey())->count());
+        $this->assertFalse($rows->contains('userId', $managementOnlyManager->getKey()));
+        $this->assertFalse($rows->contains('userId', $managementOnlySystemAdmin->getKey()));
+        $this->assertFalse($rows->contains('userId', $managerOnly->getKey()));
+
         $response
-            ->assertSee('data-user-id="'.$manager->getKey().'"', false)
-            ->assertSee('data-user-id="'.$systemAdmin->getKey().'"', false)
+            ->assertSee('data-user-id="'.$staffManager->getKey().'"', false)
+            ->assertSee('data-user-id="'.$staffSystemAdmin->getKey().'"', false)
+            ->assertDontSee('data-user-id="'.$managementOnlyManager->getKey().'"', false)
+            ->assertDontSee('data-user-id="'.$managementOnlySystemAdmin->getKey().'"', false)
             ->assertDontSee('data-user-id="'.$managerOnly->getKey().'"', false)
             ->assertSee(
-                'data-user-id="'.$this->staff('otsuki@example.com')->getKey().'"',
+                'data-user-id="'.$this->staff('staff@example.com')->getKey().'"',
                 false,
             );
 
         $this->get(
-            "/admin/shifts/staff/{$manager->getKey()}?month=2026-07&store=daianji",
+            "/admin/shifts/staff/{$staffManager->getKey()}?month=2026-07&store=daianji",
         )->assertOk();
         $this->get(
-            "/admin/shifts/staff/{$systemAdmin->getKey()}?month=2026-07&store=daianji",
+            "/admin/shifts/staff/{$staffSystemAdmin->getKey()}?month=2026-07&store=daianji",
         )->assertOk();
         $this->get(
             "/admin/shifts/staff/{$managerOnly->getKey()}?month=2026-07&store=daianji",

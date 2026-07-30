@@ -11,6 +11,7 @@
         data-shift-source="draft"
         data-store-id="{{ $screen['contextStoreId'] }}"
         data-shift-schedule-id="{{ $screen['scheduleId'] }}"
+        data-draft-version="{{ $screen['draftVersion'] }}"
         data-store-read-only="{{ $screen['isReadOnly'] ? 'true' : 'false' }}"
         data-target-month="{{ $calendar['month_value'] }}"
         @if (! $screen['isReadOnly'])
@@ -27,6 +28,8 @@
         </h1>
 
         @include('admin.shifts.partials.grid', ['screenType' => 'store'])
+
+        @include('admin.shifts.partials.warnings')
 
         <div class="admin-store-controls" aria-label="シフト入力操作">
             <div class="admin-store-controls__patterns">
@@ -66,14 +69,37 @@
                     class="admin-flat-button admin-publish-button"
                     type="button"
                     disabled
-                    title="静的UI確認中のため配布処理には接続していません"
+                    title="{{ $screen['hasBlockingWarnings'] ? '警告を解消するまで配布できません' : '配布処理は次の段階で実装します' }}"
                 >
                     シフト配布
                 </button>
             </div>
         </div>
 
-        <p @class(['admin-publish-note', 'is-warning' => $isNg])>
+        <div
+            class="admin-conflict-notice"
+            data-admin-conflict-notice
+            role="alert"
+            aria-live="assertive"
+            hidden
+        >
+            <span>
+                別の画面または別の管理者によってシフトが更新されました。
+                この画面の変更は保存されていません。最新状態を確認するため再読み込みしてください。
+            </span>
+            <button
+                class="admin-flat-button admin-conflict-notice__reload"
+                type="button"
+                data-admin-conflict-reload
+            >
+                再読み込み
+            </button>
+        </div>
+
+        <p @class([
+            'admin-publish-note',
+            'is-warning' => $screen['hasBlockingWarnings'],
+        ])>
             {{ $screen['publishStatus'] }}
         </p>
     </section>

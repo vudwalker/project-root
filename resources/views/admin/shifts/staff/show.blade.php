@@ -19,10 +19,14 @@
 
         @include('admin.shifts.partials.grid', ['screenType' => 'staff'])
 
+        @include('admin.shifts.partials.warnings')
+
         <div class="admin-staff-readonly-note">
             <span>閲覧専用</span>
             <span>{{ $screen['saveStatus'] }}</span>
-            <span @class(['is-warning' => $isNg])>{{ $screen['publishStatus'] }}</span>
+            <span @class(['is-warning' => $screen['hasBlockingWarnings']])>
+                {{ $screen['publishStatus'] }}
+            </span>
         </div>
     </section>
 @endsection

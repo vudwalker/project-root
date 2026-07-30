@@ -272,16 +272,27 @@ class AdminShiftMutationTest extends TestCase
             ->assertJsonValidationErrors('user_id');
     }
 
-    public function test_explicit_staff_role_allows_manager_and_admin_accounts_to_work(): void
+    public function test_staff_users_with_manager_or_admin_role_can_work(): void
     {
+        $staffManager = $this->staff;
+        $staffSystemAdmin = User::query()
+            ->where('email', 'fujimoto@example.com')
+            ->firstOrFail();
+        $staffManager->roles()->syncWithoutDetaching([
+            Role::query()->where('code', 'shift_manager')->firstOrFail()->getKey(),
+        ]);
+        $staffSystemAdmin->roles()->syncWithoutDetaching([
+            Role::query()->where('code', 'system_admin')->firstOrFail()->getKey(),
+        ]);
+
         $managerShift = $this->actingAs($this->manager)
             ->postJson($this->storeUrl(), $this->validPayload([
-                'user_id' => $this->manager->getKey(),
+                'user_id' => $staffManager->getKey(),
                 'work_date' => '2026-08-12',
             ]))
             ->assertCreated()
             ->assertJson([
-                'user_id' => $this->manager->getKey(),
+                'user_id' => $staffManager->getKey(),
                 'shift_date' => '2026-08-12',
                 'sequence' => 1,
             ])
@@ -291,23 +302,24 @@ class AdminShiftMutationTest extends TestCase
             ->patchJson($this->shiftUrl((int) $managerShift['shift_id']), [
                 'target_month' => '2026-08',
                 'shift_pattern_id' => $this->patternD->getKey(),
+                'expected_draft_version' => $this->currentDraftVersion(),
             ])
             ->assertOk()
             ->assertJson([
-                'user_id' => $this->manager->getKey(),
+                'user_id' => $staffManager->getKey(),
                 'shift_pattern_id' => $this->patternD->getKey(),
                 'pattern_code' => 'D',
             ]);
 
         $this->actingAs($this->manager)
             ->postJson($this->storeUrl(), $this->validPayload([
-                'user_id' => $this->admin->getKey(),
+                'user_id' => $staffSystemAdmin->getKey(),
                 'work_date' => '2026-08-13',
                 'entry_uuid' => (string) Str::uuid(),
             ]))
             ->assertCreated()
             ->assertJson([
-                'user_id' => $this->admin->getKey(),
+                'user_id' => $staffSystemAdmin->getKey(),
                 'shift_date' => '2026-08-13',
                 'sequence' => 1,
             ]);
@@ -425,6 +437,7 @@ class AdminShiftMutationTest extends TestCase
                     'C',
                 )->getKey(),
                 'entry_uuid' => $entryUuid,
+                'expected_draft_version' => 0,
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('entry_uuid');
@@ -443,6 +456,7 @@ class AdminShiftMutationTest extends TestCase
             ->patchJson($this->shiftUrl($shiftId), [
                 'target_month' => '2026-08',
                 'shift_pattern_id' => $this->patternD->getKey(),
+                'expected_draft_version' => $scheduleVersion,
             ])
             ->assertOk()
             ->assertJson([
@@ -479,6 +493,7 @@ class AdminShiftMutationTest extends TestCase
             ->patchJson($this->shiftUrl($shiftId), [
                 'target_month' => '2026-08',
                 'shift_pattern_id' => $this->patternD->getKey(),
+                'expected_draft_version' => $this->currentDraftVersion(),
             ])
             ->assertForbidden();
 
@@ -486,6 +501,7 @@ class AdminShiftMutationTest extends TestCase
             ->patchJson($this->shiftUrl($shiftId), [
                 'target_month' => '2026-07',
                 'shift_pattern_id' => $this->patternD->getKey(),
+                'expected_draft_version' => $this->currentDraftVersion(),
             ])
             ->assertNotFound();
 
@@ -493,6 +509,7 @@ class AdminShiftMutationTest extends TestCase
             ->patchJson($this->shiftUrl($shiftId, $this->otherStore), [
                 'target_month' => '2026-08',
                 'shift_pattern_id' => $this->pattern($this->otherStore, 'D')->getKey(),
+                'expected_draft_version' => $this->currentDraftVersion(),
             ])
             ->assertNotFound();
 
@@ -500,6 +517,7 @@ class AdminShiftMutationTest extends TestCase
             ->patchJson($this->shiftUrl($shiftId), [
                 'target_month' => '2026-08',
                 'shift_pattern_id' => $this->pattern($this->store, 'A')->getKey(),
+                'expected_draft_version' => $this->currentDraftVersion(),
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('shift_pattern_id');
@@ -508,6 +526,7 @@ class AdminShiftMutationTest extends TestCase
             ->patchJson($this->shiftUrl(999999), [
                 'target_month' => '2026-08',
                 'shift_pattern_id' => $this->patternD->getKey(),
+                'expected_draft_version' => $this->currentDraftVersion(),
             ])
             ->assertNotFound();
 
@@ -519,6 +538,7 @@ class AdminShiftMutationTest extends TestCase
             ->patchJson($this->shiftUrl($shiftId), [
                 'target_month' => '2026-08',
                 'shift_pattern_id' => $this->patternD->getKey(),
+                'expected_draft_version' => $this->currentDraftVersion(),
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('user_id');
@@ -539,6 +559,7 @@ class AdminShiftMutationTest extends TestCase
         $this->actingAs($this->manager)
             ->deleteJson($this->shiftUrl((int) $first['shift_id']), [
                 'target_month' => '2026-08',
+                'expected_draft_version' => $this->currentDraftVersion(),
             ])
             ->assertOk()
             ->assertJson([
@@ -581,22 +602,34 @@ class AdminShiftMutationTest extends TestCase
             ->firstOrFail();
 
         $this->actingAs($staffOnly)
-            ->deleteJson($this->shiftUrl($shiftId), ['target_month' => '2026-08'])
+            ->deleteJson($this->shiftUrl($shiftId), [
+                'target_month' => '2026-08',
+                'expected_draft_version' => $this->currentDraftVersion(),
+            ])
             ->assertForbidden();
 
         $this->actingAs($this->admin)
             ->deleteJson(
                 $this->shiftUrl($shiftId, $this->otherStore),
-                ['target_month' => '2026-08'],
+                [
+                    'target_month' => '2026-08',
+                    'expected_draft_version' => $this->currentDraftVersion(),
+                ],
             )
             ->assertNotFound();
 
         $this->actingAs($this->manager)
-            ->deleteJson($this->shiftUrl(999999), ['target_month' => '2026-08'])
+            ->deleteJson($this->shiftUrl(999999), [
+                'target_month' => '2026-08',
+                'expected_draft_version' => $this->currentDraftVersion(),
+            ])
             ->assertNotFound();
 
         $this->actingAs($this->manager)
-            ->deleteJson($this->shiftUrl($shiftId), ['target_month' => '2026-07'])
+            ->deleteJson($this->shiftUrl($shiftId), [
+                'target_month' => '2026-07',
+                'expected_draft_version' => $this->currentDraftVersion(),
+            ])
             ->assertNotFound();
 
         $this->assertDatabaseHas('shifts', ['id' => $shiftId]);
@@ -610,13 +643,17 @@ class AdminShiftMutationTest extends TestCase
             ->patchJson($this->shiftUrl($foreignShift->getKey()), [
                 'target_month' => '2026-08',
                 'shift_pattern_id' => $this->patternD->getKey(),
+                'expected_draft_version' => $this->currentDraftVersion(),
             ])
             ->assertNotFound();
 
         $this->actingAs($this->admin)
             ->deleteJson(
                 $this->shiftUrl($foreignShift->getKey()),
-                ['target_month' => '2026-08'],
+                [
+                    'target_month' => '2026-08',
+                    'expected_draft_version' => $this->currentDraftVersion(),
+                ],
             )
             ->assertNotFound();
 
@@ -626,6 +663,7 @@ class AdminShiftMutationTest extends TestCase
                 [
                     'target_month' => '2026-08',
                     'shift_pattern_id' => $foreignShift->store_shift_pattern_id,
+                    'expected_draft_version' => 1,
                 ],
             )
             ->assertForbidden();
@@ -687,6 +725,7 @@ class AdminShiftMutationTest extends TestCase
             'work_date' => '2026-08-10',
             'shift_pattern_id' => $this->patternC->getKey(),
             'entry_uuid' => (string) Str::uuid(),
+            'expected_draft_version' => $this->currentDraftVersion(),
             ...$overrides,
         ];
     }
@@ -711,6 +750,14 @@ class AdminShiftMutationTest extends TestCase
     private function shiftUrl(int $shiftId, ?Store $store = null): string
     {
         return $this->storeUrl($store).'/'.$shiftId;
+    }
+
+    private function currentDraftVersion(): int
+    {
+        return (int) (ShiftSchedule::query()
+            ->where('store_id', $this->store->getKey())
+            ->whereDate('target_month', '2026-08-01')
+            ->value('draft_version') ?? 0);
     }
 
     private function pattern(Store $store, string $code): StoreShiftPattern

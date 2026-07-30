@@ -76,7 +76,7 @@ class AdminStaticShiftUiTest extends TestCase
         );
     }
 
-    public function test_ng_state_is_a_state_of_each_admin_shift_screen(): void
+    public function test_both_admin_shift_screens_show_database_derived_warnings(): void
     {
         $staff = User::query()->where('email', 'staff@example.com')->firstOrFail();
         $storeResponse = $this->get('/admin/shifts/stores/daianji?month=2026-07&state=ng');
@@ -86,13 +86,17 @@ class AdminStaticShiftUiTest extends TestCase
 
         $storeResponse
             ->assertOk()
-            ->assertSee('修正が必要な下書きがあります')
-            ->assertSee('読み取り接続では警告状態を更新しません');
+            ->assertSee('下書きに配布を止める警告が')
+            ->assertSee('配布不可')
+            ->assertSee('data-admin-warning-panel', false)
+            ->assertSee('cross_store_duplicate', false);
 
         $staffResponse
             ->assertOk()
-            ->assertSee('修正が必要な下書きがあります')
-            ->assertSee('管理者用店舗別シフト編集画面で確認してください');
+            ->assertSee('下書きに配布を止める警告が')
+            ->assertSee('配布不可')
+            ->assertSee('data-admin-warning-panel', false)
+            ->assertSee('cross_store_duplicate', false);
     }
 
     public function test_unknown_static_context_returns_not_found(): void

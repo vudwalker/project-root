@@ -2,6 +2,7 @@
 
 namespace App\Services\Admin;
 
+use App\Exceptions\DraftVersionConflictException;
 use App\Models\Shift;
 use App\Models\ShiftSchedule;
 use App\Models\Store;
@@ -30,6 +31,7 @@ final class AdminShiftWriteService
         CarbonImmutable $workDate,
         int $patternId,
         string $entryUuid,
+        int $expectedDraftVersion,
     ): array {
         try {
             return DB::transaction(function () use (
@@ -40,6 +42,7 @@ final class AdminShiftWriteService
                 $workDate,
                 $patternId,
                 $entryUuid,
+                $expectedDraftVersion,
             ): array {
                 $existing = Shift::query()
                     ->with('schedule:id,store_id,target_month,draft_version,shift_updated_at')
@@ -85,6 +88,8 @@ final class AdminShiftWriteService
 
                     return $this->savedPayload($existing, $schedule, false);
                 }
+
+                $this->assertExpectedVersion($schedule, $expectedDraftVersion);
 
                 $nextSequence = (int) Shift::query()
                     ->where('shift_schedule_id', $schedule->getKey())
@@ -145,6 +150,7 @@ final class AdminShiftWriteService
         CarbonImmutable $targetMonth,
         int $shiftId,
         int $patternId,
+        int $expectedDraftVersion,
     ): array {
         return DB::transaction(function () use (
             $store,
@@ -152,11 +158,13 @@ final class AdminShiftWriteService
             $targetMonth,
             $shiftId,
             $patternId,
+            $expectedDraftVersion,
         ): array {
             [$shift, $schedule] = $this->lockShift(
                 $store,
                 $targetMonth,
                 $shiftId,
+                $expectedDraftVersion,
             );
             $this->resolveEligibleStaff(
                 $store,
@@ -188,17 +196,20 @@ final class AdminShiftWriteService
         User $actor,
         CarbonImmutable $targetMonth,
         int $shiftId,
+        int $expectedDraftVersion,
     ): array {
         return DB::transaction(function () use (
             $store,
             $actor,
             $targetMonth,
             $shiftId,
+            $expectedDraftVersion,
         ): array {
             [$shift, $schedule] = $this->lockShift(
                 $store,
                 $targetMonth,
                 $shiftId,
+                $expectedDraftVersion,
             );
             $deletedShiftId = (int) $shift->getKey();
             $entryUuid = (string) $shift->entry_uuid;
@@ -349,6 +360,7 @@ final class AdminShiftWriteService
         Store $store,
         CarbonImmutable $targetMonth,
         int $shiftId,
+        int $expectedDraftVersion,
     ): array {
         $reference = Shift::query()
             ->select(['id', 'shift_schedule_id'])
@@ -371,6 +383,8 @@ final class AdminShiftWriteService
             $this->throwShiftNotFound($shiftId);
         }
 
+        $this->assertExpectedVersion($schedule, $expectedDraftVersion);
+
         $shift = Shift::query()
             ->whereKey($shiftId)
             ->where('shift_schedule_id', $schedule->getKey())
@@ -382,6 +396,20 @@ final class AdminShiftWriteService
         }
 
         return [$shift, $schedule];
+    }
+
+    private function assertExpectedVersion(
+        ShiftSchedule $schedule,
+        int $expectedDraftVersion,
+    ): void {
+        $currentDraftVersion = (int) $schedule->draft_version;
+
+        if ($currentDraftVersion !== $expectedDraftVersion) {
+            throw new DraftVersionConflictException(
+                $expectedDraftVersion,
+                $currentDraftVersion,
+            );
+        }
     }
 
     private function assertIdempotentIdentity(

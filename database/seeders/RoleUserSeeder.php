@@ -39,16 +39,16 @@ class RoleUserSeeder extends Seeder
                 'admin' => [
                     'name' => 'システム管理者',
                     'email' => 'admin@example.com',
-                    'primary_store' => 'daianji',
+                    'primary_store' => null,
                     'status' => 'active',
-                    'roles' => ['staff', 'system_admin'],
+                    'roles' => ['system_admin'],
                 ],
                 'manager' => [
                     'name' => 'シフト管理者',
                     'email' => 'manager@example.com',
-                    'primary_store' => 'daianji',
+                    'primary_store' => null,
                     'status' => 'active',
-                    'roles' => ['staff', 'shift_manager'],
+                    'roles' => ['shift_manager'],
                 ],
                 'chikazawa' => [
                     'name' => '近澤幸次',
@@ -164,8 +164,6 @@ class RoleUserSeeder extends Seeder
                     'motoyama' => 3,
                     'chikazawa' => 4,
                     'oai' => 5,
-                    'manager' => 90,
-                    'admin' => 91,
                 ],
                 'noda' => [
                     'miyake' => 1,
@@ -189,6 +187,11 @@ class RoleUserSeeder extends Seeder
                         ],
                     ]);
                 }
+            }
+
+            // 過去のSeederで付与された管理専用アカウントの勤務所属を除去します。
+            foreach (['manager', 'admin'] as $managementOnlyUser) {
+                $models[$managementOnlyUser]->stores()->detach();
             }
 
             $models['manager']->managedStores()->syncWithoutDetaching([

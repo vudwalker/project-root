@@ -15,6 +15,10 @@ class StoreShiftPattern extends Model
         'store_id',
         'code',
         'work_minutes',
+        'start_time',
+        'start_day_offset',
+        'end_time',
+        'end_day_offset',
         'display_order',
         'is_active',
     ];
@@ -23,6 +27,8 @@ class StoreShiftPattern extends Model
     {
         return [
             'work_minutes' => 'integer',
+            'start_day_offset' => 'integer',
+            'end_day_offset' => 'integer',
             'display_order' => 'integer',
             'is_active' => 'boolean',
         ];
@@ -36,5 +42,13 @@ class StoreShiftPattern extends Model
     public function shifts(): HasMany
     {
         return $this->hasMany(Shift::class);
+    }
+
+    public function staffingOptionPatterns(): HasMany
+    {
+        return $this->hasMany(
+            StoreStaffingRequirementOptionPattern::class,
+            'store_shift_pattern_id',
+        );
     }
 }
