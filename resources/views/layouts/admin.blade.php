@@ -1,5 +1,10 @@
 <!DOCTYPE html>
 <html lang="ja">
+@php
+    $isSystemAdmin = auth()->user()?->hasRole('system_admin') === true;
+    $adminRoleClass = $isSystemAdmin ? 'system-admin' : 'shift-manager';
+    $adminRoleLabel = $isSystemAdmin ? 'システム管理者画面' : 'シフト管理者画面';
+@endphp
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,9 +16,9 @@
     >
     @stack('styles')
 </head>
-<body class="admin-shift-page">
+<body class="admin-shift-page admin-shift-page--{{ $adminRoleClass }}">
     <aside class="admin-utility" aria-label="管理者情報">
-        <span class="admin-utility__context">管理画面</span>
+        <span class="admin-utility__context">{{ $adminRoleLabel }}</span>
         <span>{{ $loginUserName }}</span>
         <a class="admin-utility__link" href="{{ route('admin.stores.index') }}">
             店舗管理

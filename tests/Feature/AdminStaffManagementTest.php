@@ -277,6 +277,74 @@ class AdminStaffManagementTest extends TestCase
         $this->assertNotSame('plainword', (string) $staff->password);
     }
 
+    public function test_validation_failure_keeps_non_password_input_without_flashing_passwords(): void
+    {
+        $password = 'not-retained-password';
+        $confirmation = 'different-not-retained-password';
+        $payload = $this->createPayload([
+            'name' => ' 入力保持スタッフ ',
+            'email' => ' KEPT-INPUT@EXAMPLE.NET ',
+            'status' => 'on_leave',
+            'password' => $password,
+            'password_confirmation' => $confirmation,
+            'shift_manager_role' => '1',
+            'store_ids' => [$this->daianji->id, $this->noda->id],
+        ]);
+
+        $response = $this->actingAs($this->systemAdmin)
+            ->from(route('admin.staff.create'))
+            ->post(route('admin.staff.store'), $payload)
+            ->assertRedirect(route('admin.staff.create'))
+            ->assertSessionHasErrors('password')
+            ->assertSessionHasInput([
+                'name' => '入力保持スタッフ',
+                'email' => 'KEPT-INPUT@EXAMPLE.NET',
+                'status' => 'on_leave',
+                'staff_role' => '1',
+                'shift_manager_role' => '1',
+                'store_ids' => [
+                    (string) $this->daianji->id,
+                    (string) $this->noda->id,
+                ],
+            ])
+            ->assertSessionMissingInput([
+                'password',
+                'password_confirmation',
+            ]);
+
+        $oldInput = $response->getSession()->getOldInput();
+        $this->assertArrayNotHasKey('password', $oldInput);
+        $this->assertArrayNotHasKey('password_confirmation', $oldInput);
+        $this->assertNotContains($password, $oldInput, true);
+        $this->assertNotContains($confirmation, $oldInput, true);
+
+        $this->get(route('admin.staff.create'))
+            ->assertOk()
+            ->assertSee('value="入力保持スタッフ"', false)
+            ->assertSee('value="KEPT-INPUT@EXAMPLE.NET"', false)
+            ->assertDontSee($password, false)
+            ->assertDontSee($confirmation, false);
+
+        $withoutPasswords = $payload;
+        unset(
+            $withoutPasswords['password'],
+            $withoutPasswords['password_confirmation'],
+        );
+        $this->actingAs($this->systemAdmin)
+            ->post(route('admin.staff.store'), $withoutPasswords)
+            ->assertSessionHasErrors('password');
+
+        $withoutConfirmation = $payload;
+        $withoutConfirmation['password_confirmation'] = '';
+        $this->actingAs($this->systemAdmin)
+            ->post(route('admin.staff.store'), $withoutConfirmation)
+            ->assertSessionHasErrors('password');
+
+        $this->assertDatabaseMissing('users', [
+            'email' => 'kept-input@example.net',
+        ]);
+    }
+
     public function test_shift_manager_can_only_add_staff_role_and_cannot_mutate_elevated_roles(): void
     {
         $managerOnly = $this->user('manager-only@example.com');
@@ -459,6 +527,33 @@ class AdminStaffManagementTest extends TestCase
         ]);
     }
 
+    public function test_on_leave_preserves_store_membership_and_existing_shifts_but_blocks_new_candidates(): void
+    {
+        $this->assertAvailabilityChangePreservesExistingData(
+            case: 'on-leave',
+            nextStatus: 'on_leave',
+            removeStaffRole: false,
+        );
+    }
+
+    public function test_retired_preserves_store_membership_and_existing_shifts_but_blocks_new_candidates(): void
+    {
+        $this->assertAvailabilityChangePreservesExistingData(
+            case: 'retired',
+            nextStatus: 'retired',
+            removeStaffRole: false,
+        );
+    }
+
+    public function test_staff_role_removal_preserves_store_membership_and_existing_shifts_but_blocks_new_candidates(): void
+    {
+        $this->assertAvailabilityChangePreservesExistingData(
+            case: 'role-removed',
+            nextStatus: 'active',
+            removeStaffRole: true,
+        );
+    }
+
     public function test_system_admin_self_role_and_status_are_protected(): void
     {
         $payload = $this->updatePayload(
@@ -493,6 +588,139 @@ class AdminStaffManagementTest extends TestCase
             ->assertSessionHasErrors('system_admin_role');
         $this->assertTrue(
             $this->systemAdmin->refresh()->hasRole('system_admin'),
+        );
+    }
+
+    public function test_only_active_system_admin_cannot_change_self_to_on_leave_or_retired(): void
+    {
+        $this->assertSame(
+            1,
+            $this->activeSystemAdminCount(
+                (int) $this->systemAdmin->organization_id,
+            ),
+        );
+
+        foreach (['on_leave', 'retired'] as $nextStatus) {
+            $payload = $this->updatePayload(
+                $this->systemAdmin,
+                $this->systemAdmin,
+            );
+            $payload['status'] = $nextStatus;
+
+            $this->actingAs($this->systemAdmin)
+                ->from(route('admin.staff.edit', [
+                    'user' => $this->systemAdmin,
+                ]))
+                ->patch(
+                    route('admin.staff.update', [
+                        'user' => $this->systemAdmin,
+                    ]),
+                    $payload,
+                )
+                ->assertSessionHasErrors('status');
+
+            $this->assertSame(
+                'active',
+                (string) $this->systemAdmin->refresh()->status,
+            );
+            $this->assertTrue($this->systemAdmin->hasRole('system_admin'));
+        }
+    }
+
+    public function test_another_system_admin_cannot_disable_the_only_active_admin_and_foreign_admins_do_not_count(): void
+    {
+        $inactiveActor = $this->createSystemAdmin(
+            organization: $this->systemAdmin->organization,
+            email: 'inactive-admin@example.net',
+            status: 'on_leave',
+        );
+        $foreignOrganization = Organization::query()->create([
+            'name' => '別管理組織',
+            'code' => 'foreign-admin-org',
+            'is_active' => true,
+        ]);
+        $this->createSystemAdmin(
+            organization: $foreignOrganization,
+            email: 'foreign-admin@example.net',
+            status: 'active',
+        );
+        $this->assertSame(
+            1,
+            $this->activeSystemAdminCount(
+                (int) $this->systemAdmin->organization_id,
+            ),
+        );
+
+        $inactiveActor->setAttribute('status', 'active');
+        $payload = $this->updatePayload(
+            $this->systemAdmin,
+            $inactiveActor,
+        );
+        $payload['status'] = 'retired';
+
+        $this->actingAs($inactiveActor)
+            ->from(route('admin.staff.edit', [
+                'user' => $this->systemAdmin,
+            ]))
+            ->patch(
+                route('admin.staff.update', [
+                    'user' => $this->systemAdmin,
+                ]),
+                $payload,
+            )
+            ->assertSessionHasErrors([
+                'status' => '同一組織の最後の有効なシステム管理者を非在籍へ変更できません。',
+            ]);
+
+        $this->assertSame(
+            'active',
+            (string) $this->systemAdmin->refresh()->status,
+        );
+        $this->assertSame(
+            1,
+            $this->activeSystemAdminCount(
+                (int) $this->systemAdmin->organization_id,
+            ),
+        );
+    }
+
+    public function test_second_active_same_organization_system_admin_can_change_another_admins_status(): void
+    {
+        $secondAdmin = $this->createSystemAdmin(
+            organization: $this->systemAdmin->organization,
+            email: 'second-admin@example.net',
+            status: 'active',
+        );
+        $this->assertSame(
+            2,
+            $this->activeSystemAdminCount(
+                (int) $this->systemAdmin->organization_id,
+            ),
+        );
+        $payload = $this->updatePayload(
+            $this->systemAdmin,
+            $secondAdmin,
+        );
+        $payload['status'] = 'on_leave';
+
+        $this->actingAs($secondAdmin)
+            ->patch(
+                route('admin.staff.update', [
+                    'user' => $this->systemAdmin,
+                ]),
+                $payload,
+            )
+            ->assertRedirect();
+
+        $this->assertSame(
+            'on_leave',
+            (string) $this->systemAdmin->refresh()->status,
+        );
+        $this->assertSame(
+            1,
+            $this->activeSystemAdminCount(
+                (int) $this->systemAdmin->organization_id,
+            ),
         );
     }
 
@@ -641,6 +869,161 @@ class AdminStaffManagementTest extends TestCase
         $this->assertStringContainsString('beforeunload', $script);
         $this->assertStringContainsString('isSubmitting', $script);
         $this->assertStringContainsString('saveButton.disabled', $script);
+    }
+
+    private function assertAvailabilityChangePreservesExistingData(
+        string $case,
+        string $nextStatus,
+        bool $removeStaffRole,
+    ): void {
+        $target = User::factory()->create([
+            'organization_id' => $this->systemAdmin->organization_id,
+            'name' => '既存勤務 '.$case,
+            'email' => $case.'@example.net',
+            'status' => 'active',
+        ]);
+        $target->roles()->attach($this->roleId('staff'));
+        DB::table('store_user')->insert([
+            'store_id' => $this->daianji->id,
+            'user_id' => $target->id,
+            'display_order' => 90,
+            'is_active' => true,
+            'started_on' => '2026-01-01',
+            'ended_on' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $membershipBefore = (array) DB::table('store_user')
+            ->where('store_id', $this->daianji->id)
+            ->where('user_id', $target->id)
+            ->first();
+        $pattern = $this->pattern('C');
+        $schedule = ShiftSchedule::query()->create([
+            'store_id' => $this->daianji->id,
+            'target_month' => '2026-10-01',
+            'draft_version' => 1,
+            'published_version' => 1,
+            'published_draft_version' => 1,
+            'shift_updated_at' => now(),
+            'published_at' => now(),
+            'published_by_user_id' => $this->manager->id,
+            'created_by' => $this->manager->id,
+            'updated_by' => $this->manager->id,
+        ]);
+        $shift = Shift::query()->create([
+            'shift_schedule_id' => $schedule->id,
+            'user_id' => $target->id,
+            'work_date' => '2026-10-10',
+            'store_shift_pattern_id' => $pattern->id,
+            'sequence' => 1,
+            'entry_uuid' => (string) Str::uuid(),
+            'pattern_code' => 'C',
+            'work_hours' => $pattern->work_hours,
+            'created_by' => $this->manager->id,
+            'updated_by' => $this->manager->id,
+        ]);
+        PublishedShift::query()->create([
+            'shift_schedule_id' => $schedule->id,
+            'user_id' => $target->id,
+            'work_date' => '2026-10-10',
+            'sequence' => 1,
+            'pattern_code' => 'C',
+            'work_hours' => $pattern->work_hours,
+            'published_at' => now(),
+        ]);
+
+        $payload = $this->updatePayload($target, $this->systemAdmin);
+        $payload['status'] = $nextStatus;
+
+        if ($removeStaffRole) {
+            $payload['staff_role'] = '0';
+        }
+
+        $this->actingAs($this->systemAdmin)
+            ->patch(
+                route('admin.staff.update', ['user' => $target]),
+                $payload,
+            )
+            ->assertRedirect();
+
+        $membershipAfter = (array) DB::table('store_user')
+            ->where('store_id', $this->daianji->id)
+            ->where('user_id', $target->id)
+            ->first();
+        $this->assertSame($membershipBefore, $membershipAfter);
+        $this->assertDatabaseHas('store_user', [
+            'store_id' => $this->daianji->id,
+            'user_id' => $target->id,
+            'is_active' => true,
+            'ended_on' => null,
+        ]);
+        $this->assertDatabaseHas('shifts', ['id' => $shift->id]);
+        $this->assertDatabaseHas('published_shifts', [
+            'shift_schedule_id' => $schedule->id,
+            'user_id' => $target->id,
+        ]);
+
+        $this->actingAs($this->manager)
+            ->get('/admin/shifts/stores/daianji?month=2026-10')
+            ->assertOk()
+            ->assertSee($target->name)
+            ->assertSee('data-user-id="'.$target->id.'"', false)
+            ->assertSee('data-can-create-shift="false"', false)
+            ->assertSee('data-shift-id="'.$shift->id.'"', false);
+
+        $this->actingAs($this->manager)
+            ->postJson(
+                route('admin.shifts.store', [
+                    'store' => $this->daianji->code,
+                ]),
+                [
+                    'target_month' => '2026-10',
+                    'expected_draft_version' => 1,
+                    'user_id' => $target->id,
+                    'work_date' => '2026-10-11',
+                    'shift_pattern_id' => $pattern->id,
+                    'entry_uuid' => (string) Str::uuid(),
+                ],
+            )
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('user_id');
+
+        $this->assertDatabaseHas('shifts', ['id' => $shift->id]);
+        $this->assertDatabaseHas('published_shifts', [
+            'shift_schedule_id' => $schedule->id,
+            'user_id' => $target->id,
+        ]);
+    }
+
+    private function createSystemAdmin(
+        Organization $organization,
+        string $email,
+        string $status,
+    ): User {
+        $admin = User::factory()->create([
+            'organization_id' => $organization->id,
+            'name' => $email,
+            'email' => $email,
+            'status' => $status,
+        ]);
+        $admin->roles()->attach($this->roleId('system_admin'));
+
+        return $admin;
+    }
+
+    private function activeSystemAdminCount(int $organizationId): int
+    {
+        return User::query()
+            ->where('organization_id', $organizationId)
+            ->where('status', 'active')
+            ->whereHas(
+                'roles',
+                fn ($query) => $query->where(
+                    'roles.code',
+                    'system_admin',
+                ),
+            )
+            ->count();
     }
 
     /**

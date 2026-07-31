@@ -39,6 +39,8 @@ class AdminStaticShiftUiTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('店舗別シフト編集')
+            ->assertSee('システム管理者画面')
+            ->assertSee('admin-shift-page--system-admin', false)
             ->assertSee('大安寺')
             ->assertSee('月間計')
             ->assertSee('シフト配布')
@@ -57,6 +59,30 @@ class AdminStaticShiftUiTest extends TestCase
             '.admin-shift-grid-scroll:not(.admin-shift-grid-scroll--staff)',
             $stylesheet,
         );
+        $this->assertStringContainsString(
+            'body.admin-shift-page--system-admin',
+            $stylesheet,
+        );
+        $this->assertStringContainsString(
+            '--admin-page-bg: #eef6ff;',
+            $stylesheet,
+        );
+    }
+
+    public function test_shift_manager_keeps_the_yellow_admin_context(): void
+    {
+        $manager = User::query()
+            ->where('email', 'manager@example.com')
+            ->firstOrFail();
+
+        $response = $this->actingAs($manager)
+            ->get('/admin/shifts/stores/daianji?month=2026-07');
+
+        $response
+            ->assertOk()
+            ->assertSee('シフト管理者画面')
+            ->assertSee('admin-shift-page--shift-manager', false)
+            ->assertDontSee('admin-shift-page--system-admin', false);
     }
 
     public function test_admin_staff_shift_ui_is_read_only(): void

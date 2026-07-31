@@ -47,6 +47,14 @@ body.admin-shift-page {
     font-size: 14px;
 }
 
+body.admin-shift-page--shift-manager {
+    --admin-page-bg: #ffffcf;
+}
+
+body.admin-shift-page--system-admin {
+    --admin-page-bg: #eef6ff;
+}
+
 .admin-shift-page a {
     color: inherit;
 }
