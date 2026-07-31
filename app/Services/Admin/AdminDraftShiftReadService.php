@@ -93,6 +93,12 @@ final class AdminDraftShiftReadService
             ->orderBy('users.name')
             ->orderBy('users.id')
             ->get();
+        $currentMembers->each(
+            fn (User $staff): User => $staff->setAttribute(
+                'can_create_shifts',
+                true,
+            ),
+        );
 
         $draftUserIds = Shift::query()
             ->whereHas(
@@ -105,10 +111,14 @@ final class AdminDraftShiftReadService
             ->distinct()
             ->pluck('user_id');
         $currentUserIds = $currentMembers->modelKeys();
-        $draftOnlyMembers = User::query()
-            ->select(['users.id', 'users.name', 'users.status'])
+        $draftOnlyMembers = User::withTrashed()
+            ->select([
+                'users.id',
+                'users.name',
+                'users.status',
+                'users.deleted_at',
+            ])
             ->where('organization_id', $store->organization_id)
-            ->where('status', 'active')
             ->whereKey($draftUserIds)
             ->when(
                 $currentUserIds !== [],
@@ -117,16 +127,15 @@ final class AdminDraftShiftReadService
                     $currentUserIds,
                 ),
             )
-            ->whereHas(
-                'roles',
-                fn (Builder $builder): Builder => $builder->where(
-                    'roles.code',
-                    'staff',
-                ),
-            )
             ->orderBy('users.name')
             ->orderBy('users.id')
             ->get();
+        $draftOnlyMembers->each(
+            fn (User $staff): User => $staff->setAttribute(
+                'can_create_shifts',
+                false,
+            ),
+        );
 
         return new Collection([
             ...$currentMembers->all(),

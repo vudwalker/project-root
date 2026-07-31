@@ -14,6 +14,10 @@ use Illuminate\Validation\ValidationException;
 
 final class AdminStoreAssociationService
 {
+    public function __construct(
+        private readonly StaffStoreMembershipService $membershipService,
+    ) {}
+
     /**
      * 店舗詳細画面の全項目を単一トランザクションで保存します。
      *
@@ -88,39 +92,18 @@ final class AdminStoreAssociationService
             ->get()
             ->keyBy('user_id');
         $today = $this->today();
-        $now = now();
-        $nextOrder = (int) $existing->max('display_order');
+        $staffMembers = User::withTrashed()
+            ->whereKey($existing->keys()->merge($userIds)->unique()->all())
+            ->with('roles')
+            ->get()
+            ->keyBy(fn (User $staff): int => (int) $staff->getKey());
 
         foreach ($userIds as $userId) {
-            $pivot = $existing->get($userId);
+            $staff = $staffMembers->get($userId);
 
-            if ($pivot !== null) {
-                DB::table('store_user')
-                    ->where('id', $pivot->id)
-                    ->update([
-                        'is_active' => true,
-                        'started_on' => $pivot->started_on !== null
-                            && $pivot->started_on <= $today
-                                ? $pivot->started_on
-                                : $today,
-                        'ended_on' => null,
-                        'updated_at' => $now,
-                    ]);
-
-                continue;
+            if ($staff instanceof User) {
+                $this->membershipService->activate($store, $staff, $today);
             }
-
-            $nextOrder++;
-            DB::table('store_user')->insert([
-                'store_id' => $store->getKey(),
-                'user_id' => $userId,
-                'display_order' => $nextOrder,
-                'is_active' => true,
-                'started_on' => $today,
-                'ended_on' => null,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
         }
 
         foreach ($existing as $pivot) {
@@ -131,13 +114,11 @@ final class AdminStoreAssociationService
                 continue;
             }
 
-            DB::table('store_user')
-                ->where('id', $pivot->id)
-                ->update([
-                    'is_active' => false,
-                    'ended_on' => $this->endedOn($pivot, $today),
-                    'updated_at' => $now,
-                ]);
+            $staff = $staffMembers->get((int) $pivot->user_id);
+
+            if ($staff instanceof User) {
+                $this->membershipService->deactivate($store, $staff, $today);
+            }
         }
     }
 

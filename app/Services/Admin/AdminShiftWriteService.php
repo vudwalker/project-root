@@ -195,13 +195,9 @@ final class AdminShiftWriteService
                 $shiftId,
                 $expectedDraftVersion,
             );
-            $this->targetResolver->resolveEligibleStaff(
+            $this->targetResolver->resolveExistingShiftStaff(
                 $store,
                 (int) $shift->user_id,
-                CarbonImmutable::parse(
-                    $shift->work_date->toDateString(),
-                    (string) config('app.timezone', 'Asia/Tokyo'),
-                ),
             );
             $pattern = $this->targetResolver->resolveActivePattern(
                 $store,

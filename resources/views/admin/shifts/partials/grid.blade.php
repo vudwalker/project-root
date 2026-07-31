@@ -94,6 +94,7 @@
                             data-user-id="{{ $cell['userId'] }}"
                             data-store-id="{{ $cell['storeId'] }}"
                             data-shift-date="{{ $day['date'] }}"
+                            data-can-create-shift="{{ ($row['canCreateShifts'] ?? false) ? 'true' : 'false' }}"
                             data-cell-label="{{ $row['name'] }} {{ $day['date'] }}のシフトを編集"
                             data-warning-codes="{{ implode(',', $cell['warningCodes']) }}"
                             @if ($screenType === 'store' && ! $screen['isReadOnly'])

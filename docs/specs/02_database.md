@@ -328,6 +328,8 @@ Store
   `published_shifts`を削除しない
 - 非在籍ユーザーはログインと新しい月の通常候補から除外するが、
   既存の下書き・公開シフト行は履歴として表示対象に残す
+- 初期パスワードは管理者が直接設定し、8文字以上と確認入力一致を必須とする
+- 編集時のパスワード空欄は既存ハッシュを維持する
 
 メールアドレス重複確認：
 
@@ -530,7 +532,8 @@ store_shift_manager
 - 対象ユーザーと店舗が同一組織であることを検証する
 - 追加時に`users.status = active`かつ`staff`ロールを検証する
 - 対象行を`lockForUpdate`し、有効化・再有効化・解除する
-- 再有効化時は既存行の`is_active`、`started_on`、`ended_on`を更新する
+- 再有効化時は`is_active = true`、`started_on = 再開日`、
+  `ended_on = NULL`へ更新する
 - 新規行の`display_order`を同じ店舗内で競合しないよう決定する
 - `store_id + user_id`の一意制約違反を二重所属として安全に処理する
 - 呼出元の`users`・`role_user`・`store_user`更新トランザクションへ参加する

@@ -33,38 +33,44 @@ final class AdminShiftWriteTargetResolver
                     'staff',
                 ),
             )
-            ->where(function (Builder $eligible) use ($store, $date, $workDate): void {
-                $eligible
-                    ->whereHas('stores', function (Builder $builder) use ($store, $date): void {
-                        $builder
-                            ->where('stores.id', $store->getKey())
-                            ->where('store_user.is_active', true)
-                            ->where(function (Builder $period) use ($date): void {
-                                $period
-                                    ->whereNull('store_user.started_on')
-                                    ->orWhereDate('store_user.started_on', '<=', $date);
-                            })
-                            ->where(function (Builder $period) use ($date): void {
-                                $period
-                                    ->whereNull('store_user.ended_on')
-                                    ->orWhereDate('store_user.ended_on', '>=', $date);
-                            });
+            ->whereHas('stores', function (Builder $builder) use ($store, $date): void {
+                $builder
+                    ->where('stores.id', $store->getKey())
+                    ->where('store_user.is_active', true)
+                    ->where(function (Builder $period) use ($date): void {
+                        $period
+                            ->whereNull('store_user.started_on')
+                            ->orWhereDate('store_user.started_on', '<=', $date);
                     })
-                    ->orWhereHas(
-                        'shifts.schedule',
-                        fn (Builder $schedule): Builder => $schedule
-                            ->where('store_id', $store->getKey())
-                            ->whereDate(
-                                'target_month',
-                                $workDate->startOfMonth()->toDateString(),
-                            ),
-                    );
+                    ->where(function (Builder $period) use ($date): void {
+                        $period
+                            ->whereNull('store_user.ended_on')
+                            ->orWhereDate('store_user.ended_on', '>=', $date);
+                    });
             })
             ->first();
 
         if (! $staff instanceof User) {
             throw ValidationException::withMessages([
                 'user_id' => '対象日にこの店舗へシフトを登録できるスタッフではありません。',
+            ]);
+        }
+
+        return $staff;
+    }
+
+    public function resolveExistingShiftStaff(
+        Store $store,
+        int $userId,
+    ): User {
+        $staff = User::withTrashed()
+            ->whereKey($userId)
+            ->where('organization_id', $store->organization_id)
+            ->first();
+
+        if (! $staff instanceof User) {
+            throw ValidationException::withMessages([
+                'user_id' => '対象シフトのスタッフを確認できません。',
             ]);
         }
 

@@ -183,6 +183,12 @@
             return;
         }
 
+        if (cell.dataset.canCreateShift !== 'true') {
+            setModeStatus('このスタッフへ新しいシフトは追加できません');
+
+            return;
+        }
+
         requestCreate(cell, selectedMode);
     }
 

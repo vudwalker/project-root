@@ -9,6 +9,7 @@
         rel="stylesheet"
         href="{{ asset('css/admin-shift.css') }}?v={{ filemtime(public_path('css/admin-shift.css')) }}"
     >
+    @stack('styles')
 </head>
 <body class="admin-shift-page">
     <aside class="admin-utility" aria-label="管理者情報">
@@ -16,6 +17,9 @@
         <span>{{ $loginUserName }}</span>
         <a class="admin-utility__link" href="{{ route('admin.stores.index') }}">
             店舗管理
+        </a>
+        <a class="admin-utility__link" href="{{ route('admin.staff.index') }}">
+            スタッフ管理
         </a>
         <form method="POST" action="{{ route('logout') }}" class="admin-utility__logout-form">
             @csrf

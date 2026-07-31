@@ -63,6 +63,9 @@ final class AdminDraftShiftScreenProjector
                     'userId' => (int) $staff->getKey(),
                     'storeId' => (int) $store->getKey(),
                     'name' => $staff->name,
+                    'canCreateShifts' => (bool) $staff->getAttribute(
+                        'can_create_shifts',
+                    ),
                     'cells' => $cells,
                     'monthlyTotal' => $this->makeMonthlyTotal($rowShifts),
                     'isSpacer' => false,

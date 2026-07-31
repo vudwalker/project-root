@@ -274,7 +274,7 @@ final class PublishedShiftReadService
     ): EloquentCollection {
         $currentMembers = $this->currentStaffMembers($store);
         $currentUserIds = $currentMembers->modelKeys();
-        $publishedOnlyMembers = User::query()
+        $publishedOnlyMembers = User::withTrashed()
             ->where('organization_id', $store->organization_id)
             ->whereKey($publishedUserIds)
             ->when(
@@ -284,13 +284,6 @@ final class PublishedShiftReadService
                     $currentUserIds,
                 ),
             )
-            ->whereHas(
-                'roles',
-                fn (Builder $query): Builder => $query->where(
-                    'roles.code',
-                    'staff',
-                ),
-            )
             ->orderBy('users.name')
             ->orderBy('users.id')
             ->get([
@@ -298,6 +291,7 @@ final class PublishedShiftReadService
                 'users.organization_id',
                 'users.name',
                 'users.status',
+                'users.deleted_at',
             ]);
 
         return new EloquentCollection([
