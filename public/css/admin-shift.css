@@ -500,6 +500,14 @@ body.admin-shift-page--system-admin {
     cursor: pointer;
 }
 
+[data-shift-editor-cell] > .admin-shift-grid__shift-code:only-child {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
 .admin-shift-grid__shift-code.is-save-pending,
 .admin-shift-grid__shift-code.is-saving {
     opacity: 0.62;

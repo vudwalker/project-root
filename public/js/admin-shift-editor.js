@@ -170,8 +170,10 @@
         const shift = target.closest('.admin-shift-grid__shift-code');
 
         if (selectedMode.type === 'delete') {
-            if (shift) {
-                requestDelete(shift);
+            const deleteTarget = resolveDeleteTarget(cell, shift);
+
+            if (deleteTarget) {
+                requestDelete(deleteTarget);
             }
 
             return;
@@ -190,6 +192,24 @@
         }
 
         requestCreate(cell, selectedMode);
+    }
+
+    function resolveDeleteTarget(cell, clickedShift) {
+        if (clickedShift) {
+            return clickedShift;
+        }
+
+        const shifts = cell.querySelectorAll('.admin-shift-grid__shift-code');
+
+        if (shifts.length === 1) {
+            return shifts[0];
+        }
+
+        if (shifts.length > 1) {
+            setModeStatus('複数のシフトがあります。削除するシフトを選択してください。');
+        }
+
+        return null;
     }
 
     function requestCreate(cell, pattern) {

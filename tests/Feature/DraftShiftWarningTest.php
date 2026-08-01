@@ -359,6 +359,29 @@ class DraftShiftWarningTest extends TestCase
         $this->assertSame(0, $warning['current_c_count']);
     }
 
+    public function test_existing_target_store_shift_counts_before_membership_start_date(): void
+    {
+        $date = CarbonImmutable::parse('2026-08-14');
+        $this->staffA->stores()->updateExistingPivot(
+            $this->store->getKey(),
+            [
+                'is_active' => true,
+                'started_on' => '2026-08-31',
+                'ended_on' => null,
+            ],
+        );
+        $this->addShift($this->store, $this->staffA, $date, 'C');
+
+        $staffingWarnings = collect($this->evaluate()['warnings'])
+            ->where('work_date', $date->toDateString())
+            ->whereIn('warning_code', [
+                DraftShiftWarningCode::StaffingShortage->value,
+                DraftShiftWarningCode::StaffingExcess->value,
+            ]);
+
+        $this->assertTrue($staffingWarnings->isEmpty());
+    }
+
     public function test_same_staff_same_pattern_is_counted_once_but_duplicate_is_reported(): void
     {
         $date = CarbonImmutable::parse('2026-08-16');

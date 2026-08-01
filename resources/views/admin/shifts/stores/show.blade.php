@@ -129,5 +129,8 @@
     <script src="{{ asset('js/admin-shift-view.js') }}" defer></script>
     <script src="{{ asset('js/admin-shift-warning.js') }}" defer></script>
     <script src="{{ asset('js/admin-shift-publication.js') }}" defer></script>
-    <script src="{{ asset('js/admin-shift-editor.js') }}" defer></script>
+    <script
+        src="{{ asset('js/admin-shift-editor.js') }}?v={{ filemtime(public_path('js/admin-shift-editor.js')) }}"
+        defer
+    ></script>
 @endpush

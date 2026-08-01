@@ -99,7 +99,7 @@ final class DraftShiftWarningService
 
     /**
      * 対象店舗で表示月に出勤予定があるスタッフだけを、人数判定に必要な
-     * ロール・対象店舗所属とともに読み込みます。
+     * ロールとともに読み込みます。
      */
     private function loadTargetSchedule(
         Store $store,
@@ -136,11 +136,6 @@ final class DraftShiftWarningService
                 },
                 'shifts.user:id,organization_id,name,status,deleted_at',
                 'shifts.user.roles:id,code',
-                'shifts.user.stores' => function ($query) use ($store): void {
-                    $query
-                        ->select(['stores.id', 'stores.organization_id', 'stores.name'])
-                        ->where('stores.id', $store->getKey());
-                },
             ])
             ->first();
 

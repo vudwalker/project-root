@@ -705,12 +705,30 @@ class AdminShiftMutationTest extends TestCase
         $warningScript = file_get_contents(public_path('js/admin-shift-warning.js'));
         $publicationScript = file_get_contents(public_path('js/admin-shift-publication.js'));
         $navigationScript = file_get_contents(public_path('js/admin-shift-static.js'));
+        $stylesheet = file_get_contents(public_path('css/admin-shift.css'));
 
         $this->assertStringContainsString('const DEBOUNCE_MS = 700;', $script);
         $this->assertStringContainsString('crypto.randomUUID', $script);
         $this->assertStringContainsString("method: 'POST'", $script);
         $this->assertStringContainsString("method: 'PATCH'", $script);
         $this->assertStringContainsString("method: 'DELETE'", $script);
+        $this->assertStringContainsString(
+            'const deleteTarget = resolveDeleteTarget(cell, shift);',
+            $script,
+        );
+        $this->assertStringContainsString(
+            "cell.querySelectorAll('.admin-shift-grid__shift-code')",
+            $script,
+        );
+        $this->assertStringContainsString('if (shifts.length === 1)', $script);
+        $this->assertStringContainsString(
+            '[data-shift-editor-cell] > .admin-shift-grid__shift-code:only-child',
+            $stylesheet,
+        );
+        $this->assertStringContainsString(
+            'admin-shift-editor.js?v='.filemtime(public_path('js/admin-shift-editor.js')),
+            $storeResponse->getContent(),
+        );
         $this->assertStringContainsString("'beforeunload'", $script);
         $this->assertStringContainsString('queue.hasUnsaved()', $script);
         $this->assertStringContainsString(

@@ -67,7 +67,7 @@ final class PatternStaffingWarningEvaluator
                     $shift->pattern_code,
                     self::TARGET_CODES,
                     true,
-                ) && $this->isEligibleStaffShift($shift, $store, $date),
+                ) && $this->isEligibleStaffShift($shift, $store),
             );
             $counts = collect(self::TARGET_CODES)
                 ->mapWithKeys(fn (string $code): array => [
@@ -317,34 +317,13 @@ final class PatternStaffingWarningEvaluator
     private function isEligibleStaffShift(
         Shift $shift,
         Store $store,
-        CarbonImmutable $workDate,
     ): bool {
         $user = $shift->user;
 
-        if (
-            ! $user instanceof User
-            || $user->status !== 'active'
-            || (int) $user->organization_id !== (int) $store->organization_id
-            || ! $user->hasRole('staff')
-        ) {
-            return false;
-        }
-
-        $membership = $user->stores->first(
-            fn (Store $membershipStore): bool => (int) $membershipStore->getKey()
-                === (int) $store->getKey(),
-        );
-
-        if (! $membership instanceof Store || ! (bool) $membership->pivot->is_active) {
-            return false;
-        }
-
-        $date = $workDate->toDateString();
-        $startedOn = $membership->pivot->started_on;
-        $endedOn = $membership->pivot->ended_on;
-
-        return ($startedOn === null || (string) $startedOn <= $date)
-            && ($endedOn === null || (string) $endedOn >= $date);
+        return $user instanceof User
+            && $user->status === 'active'
+            && (int) $user->organization_id === (int) $store->organization_id
+            && $user->hasRole('staff');
     }
 
     /**
