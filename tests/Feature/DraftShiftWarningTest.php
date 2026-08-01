@@ -15,6 +15,7 @@ use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -232,6 +233,96 @@ class DraftShiftWarningTest extends TestCase
             $warning['store_names'],
         );
         $this->assertCount(2, $warning['shift_patterns']);
+    }
+
+    public function test_existing_cross_store_shift_is_checked_after_membership_ends(): void
+    {
+        $date = CarbonImmutable::parse('2026-08-18');
+        $this->addShift($this->store, $this->staffA, $date, 'C');
+        $this->addShift($this->otherStore, $this->staffA, $date, 'D');
+        $this->staffA->stores()->updateExistingPivot(
+            $this->otherStore->getKey(),
+            [
+                'is_active' => false,
+                'ended_on' => '2026-08-17',
+            ],
+        );
+
+        $warning = $this->warningAt(
+            $this->evaluate(),
+            $date,
+            DraftShiftWarningCode::CrossStoreDuplicate,
+        );
+
+        $this->assertEqualsCanonicalizing(
+            [$this->store->getKey(), $this->otherStore->getKey()],
+            $warning['store_ids'],
+        );
+    }
+
+    public function test_evaluation_loads_only_shifts_matching_target_store_work_dates(): void
+    {
+        $targetDate = CarbonImmutable::parse('2026-08-18');
+        $targetShift = $this->addShift($this->store, $this->staffA, $targetDate, 'C');
+        $matchingShift = $this->addShift(
+            $this->otherStore,
+            $this->staffA,
+            $targetDate,
+            'D',
+        );
+        $this->addShift(
+            $this->otherStore,
+            $this->staffA,
+            CarbonImmutable::parse('2026-08-19'),
+            'D',
+        );
+        $unrelatedStaff = $this->createUser(
+            'unrelated-warning-scope@example.net',
+            ['staff'],
+            false,
+        );
+        $this->addShift(
+            $this->otherStore,
+            $unrelatedStaff,
+            CarbonImmutable::parse('2026-08-20'),
+            'D',
+        );
+        $this->addShift(
+            $this->otherStore,
+            $unrelatedStaff,
+            CarbonImmutable::parse('2026-08-20'),
+            'D',
+        );
+        $retrievedShiftIds = [];
+        $eventName = 'eloquent.retrieved: '.Shift::class;
+
+        Event::listen(
+            $eventName,
+            function (Shift $shift) use (&$retrievedShiftIds): void {
+                $retrievedShiftIds[] = (int) $shift->getKey();
+            },
+        );
+
+        try {
+            $result = $this->evaluate();
+        } finally {
+            Event::forget($eventName);
+        }
+
+        sort($retrievedShiftIds);
+        $expectedShiftIds = [
+            (int) $targetShift->getKey(),
+            (int) $matchingShift->getKey(),
+        ];
+        sort($expectedShiftIds);
+
+        $this->assertSame($expectedShiftIds, $retrievedShiftIds);
+        $warning = $this->warningAt(
+            $result,
+            $targetDate,
+            DraftShiftWarningCode::CrossStoreDuplicate,
+        );
+        $this->assertSame($expectedShiftIds, $warning['shift_ids']);
     }
 
     public function test_staff_role_controls_staffing_count_even_with_admin_roles(): void
