@@ -27,6 +27,13 @@
     font-size: 11px;
 }
 
+.admin-staff-heading__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
 .admin-staff-button {
     display: inline-flex;
     min-height: 30px;

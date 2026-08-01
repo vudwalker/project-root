@@ -1,0 +1,180 @@
+.admin-shift-members {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.admin-shift-members__heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 18px;
+}
+
+.admin-shift-members__heading h1,
+.admin-shift-members__panel h2,
+.admin-shift-members__legacy h2 {
+    margin: 0;
+}
+
+.admin-shift-members__heading p {
+    margin: 8px 0 0;
+}
+
+.admin-shift-members__eyebrow {
+    color: #59636e;
+    font-size: 0.85rem;
+}
+
+.admin-shift-members__back,
+.admin-shift-members__months a,
+.admin-shift-members__add button,
+.admin-shift-members__actions button,
+.admin-shift-members__conflict button {
+    border: 1px solid #7a8794;
+    border-radius: 4px;
+    background: #fff;
+    color: #27313a;
+    cursor: pointer;
+    padding: 8px 12px;
+    text-decoration: none;
+}
+
+.admin-shift-members__back:hover,
+.admin-shift-members__months a:hover,
+.admin-shift-members__add button:hover,
+.admin-shift-members__actions button:hover,
+.admin-shift-members__conflict button:hover {
+    background: #eef3f6;
+}
+
+.admin-shift-members__months {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.admin-shift-members__status {
+    min-height: 1.5em;
+    color: #59636e;
+}
+
+.admin-shift-members__status[data-state="error"],
+.admin-shift-members__status[data-state="conflict"] {
+    color: #a32626;
+}
+
+.admin-shift-members__panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr);
+    gap: 24px;
+    margin-top: 18px;
+}
+
+.admin-shift-members__panel > section,
+.admin-shift-members__legacy {
+    border: 1px solid #c8d0d7;
+    border-radius: 6px;
+    background: #fff;
+    padding: 18px;
+}
+
+.admin-shift-members__hint {
+    color: #59636e;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.admin-shift-members__list {
+    display: grid;
+    gap: 6px;
+    margin: 16px 0 0;
+    padding-left: 28px;
+}
+
+.admin-shift-members__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #e4e8eb;
+}
+
+.admin-shift-members__name {
+    flex: 1;
+}
+
+.admin-shift-members__badge {
+    color: #8b4b00;
+    font-size: 0.8rem;
+}
+
+.admin-shift-members__actions {
+    display: flex;
+    gap: 4px;
+}
+
+.admin-shift-members__actions button {
+    padding: 4px 7px;
+}
+
+.admin-shift-members__empty {
+    color: #59636e;
+}
+
+.admin-shift-members__add {
+    display: grid;
+    gap: 8px;
+}
+
+.admin-shift-members__add select {
+    min-height: 38px;
+    padding: 6px;
+}
+
+.admin-shift-members__add button {
+    justify-self: start;
+}
+
+.admin-shift-members__legacy {
+    margin-top: 24px;
+}
+
+.admin-shift-members__conflict {
+    margin-top: 18px;
+    border: 1px solid #bd5454;
+    background: #fff2f2;
+    color: #7e1f1f;
+    padding: 12px;
+}
+
+@media (max-width: 720px) {
+    .admin-shift-members {
+        padding: 16px;
+    }
+
+    .admin-shift-members__heading,
+    .admin-shift-members__panel {
+        display: block;
+    }
+
+    .admin-shift-members__back {
+        display: inline-block;
+        margin-top: 14px;
+    }
+
+    .admin-shift-members__panel > section + section {
+        margin-top: 16px;
+    }
+
+    .admin-shift-members__item {
+        flex-wrap: wrap;
+    }
+
+    .admin-shift-members__actions {
+        width: 100%;
+    }
+}

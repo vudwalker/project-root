@@ -39,6 +39,15 @@
         @include('admin.shifts.partials.warnings')
 
         <div class="admin-store-controls" aria-label="シフト入力操作">
+            <a
+                class="admin-flat-button"
+                href="{{ route('admin.shifts.members', [
+                    'store' => $screen['contextStoreCode'],
+                    'month' => $calendar['month_value'],
+                ]) }}"
+            >
+                月次表示スタッフ管理
+            </a>
             <div class="admin-store-controls__patterns">
                 @foreach ($screen['patterns'] as $pattern)
                     <button

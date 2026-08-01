@@ -12,6 +12,8 @@ class ShiftSchedule extends Model
         'store_id',
         'target_month',
         'draft_version',
+        'monthly_members_initialized_at',
+        'monthly_members_version',
         'published_version',
         'published_draft_version',
         'shift_updated_at',
@@ -26,6 +28,8 @@ class ShiftSchedule extends Model
         return [
             'target_month' => 'date',
             'draft_version' => 'integer',
+            'monthly_members_initialized_at' => 'datetime',
+            'monthly_members_version' => 'integer',
             'published_version' => 'integer',
             'published_draft_version' => 'integer',
             'shift_updated_at' => 'datetime',
@@ -44,6 +48,18 @@ class ShiftSchedule extends Model
             ->orderBy('work_date')
             ->orderBy('sequence')
             ->orderBy('id');
+    }
+
+    public function scheduleUsers(): HasMany
+    {
+        return $this->hasMany(ShiftScheduleUser::class)
+            ->orderBy('display_order')
+            ->orderBy('user_id');
+    }
+
+    public function monthlyMembers(): HasMany
+    {
+        return $this->scheduleUsers();
     }
 
     public function publishedShifts(): HasMany

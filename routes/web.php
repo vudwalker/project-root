@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdminShiftController;
 use App\Http\Controllers\Admin\AdminShiftMutationController;
 use App\Http\Controllers\Admin\AdminShiftPublicationController;
+use App\Http\Controllers\Admin\AdminShiftScheduleMemberController;
 use App\Http\Controllers\Admin\AdminStaffController;
 use App\Http\Controllers\Admin\AdminStoreController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
@@ -79,6 +80,25 @@ Route::middleware(['auth', EnsureAdminAccess::class])
                 ->name('admin.shifts.stores.show');
             Route::get('/admin/shifts/staff/{staff?}', 'staff')
                 ->name('admin.shifts.staff.show');
+        });
+
+        Route::controller(AdminShiftScheduleMemberController::class)->group(function (): void {
+            Route::get(
+                '/admin/shifts/stores/{store}/members',
+                'index',
+            )->name('admin.shifts.members');
+            Route::post(
+                '/admin/shifts/stores/{store}/members',
+                'add',
+            )->name('admin.shifts.members.add');
+            Route::delete(
+                '/admin/shifts/stores/{store}/members/{user}',
+                'remove',
+            )->name('admin.shifts.members.remove');
+            Route::patch(
+                '/admin/shifts/stores/{store}/members/order',
+                'reorder',
+            )->name('admin.shifts.members.reorder');
         });
 
         Route::controller(AdminShiftMutationController::class)->group(function (): void {

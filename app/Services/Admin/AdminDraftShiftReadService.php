@@ -4,12 +4,14 @@ namespace App\Services\Admin;
 
 use App\Models\Shift;
 use App\Models\ShiftSchedule;
+use App\Models\ShiftScheduleUser;
 use App\Models\Store;
 use App\Models\StoreShiftPattern;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * 管理者用UIへ表示する下書きシフトを、副作用を発生させずに読み取ります。
@@ -19,6 +21,7 @@ final class AdminDraftShiftReadService
     public function __construct(
         private readonly DraftShiftWarningService $warningService,
         private readonly AdminDraftShiftScreenProjector $screenProjector,
+        private readonly AdminShiftScheduleMemberService $memberService,
     ) {}
 
     /**
@@ -63,20 +66,110 @@ final class AdminDraftShiftReadService
      *
      * @return Collection<int, User>
      */
-    public function staffForStore(Store $store, CarbonImmutable $targetMonth): Collection
-    {
+    public function staffForStore(
+        Store $store,
+        CarbonImmutable $targetMonth,
+        ?User $actor = null,
+    ): Collection {
         $monthStart = $targetMonth->startOfMonth()->toDateString();
         $monthEnd = $targetMonth->endOfMonth()->toDateString();
 
+        if ($actor instanceof User) {
+            $this->memberService->ensureInitialized($store, $actor, $targetMonth);
+        }
+
+        $schedule = ShiftSchedule::query()
+            ->where('store_id', $store->getKey())
+            ->whereDate('target_month', $monthStart)
+            ->first();
+
+        if (
+            ! $schedule instanceof ShiftSchedule
+            || $schedule->monthly_members_initialized_at === null
+        ) {
+            return $this->legacyStaffForStore($store, $targetMonth);
+        }
+
+        $monthlyRows = ShiftScheduleUser::query()
+            ->where('shift_schedule_id', $schedule->getKey())
+            ->orderBy('display_order')
+            ->orderBy('user_id')
+            ->get();
+        $monthlyUserIds = $monthlyRows->pluck('user_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+        $shiftUserIds = Shift::query()
+            ->where('shift_schedule_id', $schedule->getKey())
+            ->whereBetween('work_date', [$monthStart, $monthEnd])
+            ->distinct()
+            ->pluck('user_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+        $allUserIds = array_values(array_unique([
+            ...$monthlyUserIds,
+            ...$shiftUserIds,
+        ]));
+        $users = User::withTrashed()
+            ->select(['users.id', 'users.name', 'users.status', 'users.deleted_at'])
+            ->whereKey($allUserIds)
+            ->get()
+            ->keyBy(fn (User $user): int => (int) $user->getKey());
+        $eligibleIds = $this->monthlyEligibleUserIds($store, $targetMonth);
+        $eligibleLookup = array_fill_keys($eligibleIds, true);
+        $monthlyLookup = array_fill_keys($monthlyUserIds, true);
+        $staffMembers = new Collection;
+
+        foreach ($monthlyRows as $monthlyRow) {
+            $staff = $users->get((int) $monthlyRow->user_id);
+
+            if (! $staff instanceof User) {
+                continue;
+            }
+
+            $staff->setAttribute('can_create_shifts', isset(
+                $eligibleLookup[(int) $staff->getKey()],
+            ));
+            $staff->setAttribute('is_monthly_member', true);
+            $staffMembers->push($staff);
+        }
+
+        $draftOnlyMembers = collect($shiftUserIds)
+            ->filter(fn (int $userId): bool => ! isset($monthlyLookup[$userId]))
+            ->map(fn (int $userId): ?User => $users->get($userId))
+            ->filter()
+            ->sortBy(fn (User $staff): string => sprintf(
+                '%s|%010d',
+                $staff->name,
+                $staff->getKey(),
+            ))
+            ->values();
+        $draftOnlyMembers->each(
+            fn (User $staff): User => $staff
+                ->setAttribute('can_create_shifts', false)
+                ->setAttribute('is_monthly_member', false),
+        );
+
+        return new Collection([
+            ...$staffMembers->all(),
+            ...$draftOnlyMembers->all(),
+        ]);
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    private function legacyStaffForStore(
+        Store $store,
+        CarbonImmutable $targetMonth,
+    ): Collection {
+        $monthStart = $targetMonth->startOfMonth()->toDateString();
+        $monthEnd = $targetMonth->endOfMonth()->toDateString();
         $currentMembers = $store->staffMembers()
             ->select(['users.id', 'users.name', 'users.status'])
             ->where('users.status', 'active')
             ->whereHas(
                 'roles',
-                fn (Builder $builder): Builder => $builder->where(
-                    'roles.code',
-                    'staff',
-                ),
+                fn (Builder $builder): Builder => $builder->where('roles.code', 'staff'),
             )
             ->wherePivot('is_active', true)
             ->where(function (Builder $period) use ($monthEnd): void {
@@ -94,12 +187,8 @@ final class AdminDraftShiftReadService
             ->orderBy('users.id')
             ->get();
         $currentMembers->each(
-            fn (User $staff): User => $staff->setAttribute(
-                'can_create_shifts',
-                true,
-            ),
+            fn (User $staff): User => $staff->setAttribute('can_create_shifts', true),
         );
-
         $draftUserIds = Shift::query()
             ->whereHas(
                 'schedule',
@@ -112,35 +201,66 @@ final class AdminDraftShiftReadService
             ->pluck('user_id');
         $currentUserIds = $currentMembers->modelKeys();
         $draftOnlyMembers = User::withTrashed()
-            ->select([
-                'users.id',
-                'users.name',
-                'users.status',
-                'users.deleted_at',
-            ])
+            ->select(['users.id', 'users.name', 'users.status', 'users.deleted_at'])
             ->where('organization_id', $store->organization_id)
             ->whereKey($draftUserIds)
             ->when(
                 $currentUserIds !== [],
-                fn (Builder $query): Builder => $query->whereNotIn(
-                    'users.id',
-                    $currentUserIds,
-                ),
+                fn (Builder $query): Builder => $query->whereNotIn('users.id', $currentUserIds),
             )
             ->orderBy('users.name')
             ->orderBy('users.id')
             ->get();
         $draftOnlyMembers->each(
-            fn (User $staff): User => $staff->setAttribute(
-                'can_create_shifts',
-                false,
-            ),
+            fn (User $staff): User => $staff->setAttribute('can_create_shifts', false),
         );
 
         return new Collection([
             ...$currentMembers->all(),
             ...$draftOnlyMembers->all(),
         ]);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function monthlyEligibleUserIds(
+        Store $store,
+        CarbonImmutable $targetMonth,
+    ): array {
+        $monthStart = $targetMonth->startOfMonth()->toDateString();
+        $monthEnd = $targetMonth->endOfMonth()->toDateString();
+
+        return DB::table('store_user')
+            ->join('users', 'users.id', '=', 'store_user.user_id')
+            ->where('store_user.store_id', $store->getKey())
+            ->where('store_user.is_active', true)
+            ->where('users.organization_id', $store->organization_id)
+            ->where('users.status', 'active')
+            ->whereExists(function ($query): void {
+                $query
+                    ->selectRaw('1')
+                    ->from('role_user')
+                    ->join('roles', 'roles.id', '=', 'role_user.role_id')
+                    ->whereColumn('role_user.user_id', 'users.id')
+                    ->where('roles.code', 'staff');
+            })
+            ->where(function ($period) use ($monthEnd): void {
+                $period
+                    ->whereNull('store_user.started_on')
+                    ->orWhereDate('store_user.started_on', '<=', $monthEnd);
+            })
+            ->where(function ($period) use ($monthStart): void {
+                $period
+                    ->whereNull('store_user.ended_on')
+                    ->orWhereDate('store_user.ended_on', '>=', $monthStart);
+            })
+            ->orderBy('store_user.display_order')
+            ->orderBy('users.name')
+            ->orderBy('users.id')
+            ->pluck('users.id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
     }
 
     /**

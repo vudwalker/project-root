@@ -16,9 +16,14 @@
                 <p class="admin-staff-heading__eyebrow">組織内スタッフ</p>
                 <h1 id="admin-staff-title">スタッフ管理</h1>
             </div>
-            <a class="admin-staff-button admin-staff-button--primary" href="{{ route('admin.staff.create') }}">
-                スタッフ追加
-            </a>
+            <div class="admin-staff-heading__actions">
+                <a class="admin-staff-button" href="{{ route('admin.top') }}">
+                    シフト画面に戻る
+                </a>
+                <a class="admin-staff-button admin-staff-button--primary" href="{{ route('admin.staff.create') }}">
+                    スタッフ追加
+                </a>
+            </div>
         </header>
 
         @if (session('status'))

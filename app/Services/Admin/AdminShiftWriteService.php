@@ -17,6 +17,7 @@ final class AdminShiftWriteService
     public function __construct(
         private readonly AdminShiftWriteTargetResolver $targetResolver,
         private readonly AdminShiftScheduleWriter $scheduleWriter,
+        private readonly AdminShiftScheduleMemberService $memberService,
         private readonly AdminShiftWritePayloadFactory $payloadFactory,
     ) {}
 
@@ -76,10 +77,19 @@ final class AdminShiftWriteService
                     $store,
                     $patternId,
                 );
+                $this->memberService->ensureInitialized(
+                    $store,
+                    $actor,
+                    $targetMonth,
+                );
                 $schedule = $this->scheduleWriter->lockOrCreateSchedule(
                     $store,
                     $actor,
                     $targetMonth,
+                );
+                $this->memberService->assertMonthlyMember(
+                    $schedule,
+                    $userId,
                 );
 
                 // 同じ店舗・対象月の追加要求を直列化した後でもう一度UUIDを確認します。
