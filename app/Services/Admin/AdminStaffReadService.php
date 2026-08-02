@@ -24,9 +24,9 @@ final class AdminStaffReadService
             ->where('organization_id', $actor->organization_id)
             ->whereHas(
                 'roles',
-                fn (Builder $query): Builder => $query->whereIn(
+                fn (Builder $query): Builder => $query->where(
                     'roles.code',
-                    ['staff', 'shift_manager', 'system_admin'],
+                    'staff',
                 ),
             )
             ->with([
@@ -138,6 +138,17 @@ final class AdminStaffReadService
             'shift_manager' => 'シフト管理者',
             'system_admin' => 'システム管理者',
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function staffListRoleLabels(): array
+    {
+        return array_intersect_key(
+            $this->roleLabels(),
+            array_flip(['staff', 'shift_manager']),
+        );
     }
 
     private function applyCurrentMembershipScope(

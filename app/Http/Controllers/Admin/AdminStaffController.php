@@ -39,7 +39,7 @@ final class AdminStaffController extends Controller
             ),
             'filters' => $filters,
             'loginUserName' => $actor->name,
-            'roleLabels' => $this->readService->roleLabels(),
+            'roleLabels' => $this->readService->staffListRoleLabels(),
             'staffMembers' => $staffMembers,
             'statusLabels' => $this->readService->statusLabels(),
             'storeOptions' => $this->readService->storeOptions($actor),

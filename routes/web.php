@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminShiftController;
+use App\Http\Controllers\Admin\AdminShiftManagerController;
 use App\Http\Controllers\Admin\AdminShiftMutationController;
 use App\Http\Controllers\Admin\AdminShiftPublicationController;
 use App\Http\Controllers\Admin\AdminShiftScheduleMemberController;
@@ -52,6 +53,21 @@ Route::middleware(['auth', EnsureAdminAccess::class])
                 ->name('admin.staff.edit');
             Route::patch('/admin/staff/{user}', 'update')
                 ->name('admin.staff.update');
+        });
+
+          Route::controller(AdminShiftManagerController::class)->group(function (): void {
+              Route::get('/admin/shift-managers', 'index')
+                  ->name('admin.shift-managers.index');
+              Route::get('/admin/shift-managers/create', 'create')
+                  ->name('admin.shift-managers.create');
+              Route::post('/admin/shift-managers', 'store')
+                  ->name('admin.shift-managers.store');
+              Route::patch('/admin/shift-managers', 'update')
+                  ->name('admin.shift-managers.update');
+              Route::get('/admin/shift-managers/{user}/edit', 'edit')
+                  ->name('admin.shift-managers.edit');
+              Route::patch('/admin/shift-managers/{user}', 'updateProfile')
+                  ->name('admin.shift-managers.profile.update');
         });
 
         Route::controller(AdminStoreController::class)->group(function (): void {

@@ -38,7 +38,7 @@ final class AdminStaffIndexRequest extends FormRequest
             'role' => [
                 'nullable',
                 'string',
-                Rule::in(['staff', 'shift_manager', 'system_admin']),
+                Rule::in(['staff', 'shift_manager']),
             ],
         ];
     }

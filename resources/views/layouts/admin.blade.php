@@ -26,6 +26,11 @@
         <a class="admin-utility__link" href="{{ route('admin.staff.index') }}">
             スタッフ管理
         </a>
+        @if ($isSystemAdmin)
+            <a class="admin-utility__link" href="{{ route('admin.shift-managers.index') }}">
+                シフト管理者管理
+            </a>
+        @endif
         <form method="POST" action="{{ route('logout') }}" class="admin-utility__logout-form">
             @csrf
             <button type="submit" class="admin-utility__logout">ログアウト</button>

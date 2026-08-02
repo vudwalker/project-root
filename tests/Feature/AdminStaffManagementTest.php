@@ -70,7 +70,7 @@ class AdminStaffManagementTest extends TestCase
             ->assertSee('name="store_id"', false)
             ->assertSee('name="role"', false)
             ->assertSee('スタッフ追加')
-            ->assertSee($this->systemAdmin->name)
+            ->assertDontSee('manager-only@example.com')
             ->assertDontSee($unroled->name)
             ->assertDontSee($foreign->name)
             ->assertDontSee(
@@ -78,7 +78,7 @@ class AdminStaffManagementTest extends TestCase
                 false,
             );
 
-        $this->assertTrue(
+        $this->assertFalse(
             $response->viewData('staffMembers')->contains(
                 fn (User $user): bool => $user->is($this->systemAdmin),
             ),
@@ -101,10 +101,7 @@ class AdminStaffManagementTest extends TestCase
             ->assertOk()
             ->assertViewHas(
                 'staffMembers',
-                fn ($staff): bool => $staff->isNotEmpty()
-                    && $staff->every(
-                        fn (User $user): bool => $user->hasRole('shift_manager'),
-                    ),
+                fn ($staff): bool => $staff->isEmpty(),
             );
         $this->actingAs($this->manager)
             ->get(route('admin.staff.index', ['store_id' => $this->noda->id]))

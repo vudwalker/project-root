@@ -43,7 +43,7 @@ class RoleUserSeeder extends Seeder
                     'roles' => ['system_admin'],
                 ],
                 'manager' => [
-                    'name' => 'シフト管理者',
+                    'name' => '管理者サンプル',
                     'email' => 'manager@example.com',
                     'status' => 'active',
                     'roles' => ['shift_manager'],

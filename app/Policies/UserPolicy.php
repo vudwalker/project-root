@@ -41,4 +41,25 @@ final class UserPolicy
         return $this->update($actor, $target)
             && $actor->hasRole('system_admin');
     }
+
+    public function manageShiftManagers(User $actor): bool
+    {
+        return $actor->canAccessAdmin()
+            && $actor->hasRole('system_admin');
+    }
+
+    public function manageShiftManagerProfile(User $actor, User $target): bool
+    {
+        if (! $this->manageShiftManagers($actor)
+            || (int) $actor->organization_id !== (int) $target->organization_id
+            || $target->trashed()
+        ) {
+            return false;
+        }
+
+        $target->loadMissing('roles');
+
+        return $target->hasRole('shift_manager')
+            && ! $target->hasRole('system_admin');
+    }
 }
